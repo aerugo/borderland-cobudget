@@ -71,6 +71,8 @@ export default ({
     resolver: yupResolver(schema),
   });
 
+  const titleRegistration = register("guideline.title");
+
   useEffect(() => {
     register("guideline.description");
   }, [register]);
@@ -104,7 +106,11 @@ export default ({
               name="guideline.title"
               testid="guideline-title"
               defaultValue={guideline.title}
-              inputRef={register("guideline.title").ref}
+              inputRef={titleRegistration.ref}
+              inputProps={{
+                onChange: titleRegistration.onChange,
+                onBlur: titleRegistration.onBlur,
+              }}
               error={errors.guideline?.title}
               helperText={errors.guideline?.title?.message}
               color={round.color}
