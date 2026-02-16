@@ -320,8 +320,9 @@ const MyApp = ({ Component, pageProps, router, emotionCache = clientSideEmotionC
   const isMaintenanceMode = maintenanceData?.instanceSettings?.maintenanceMode === true;
   const isSuperAdminInSession = currentUser?.isSuperAdmin && ss &&
     (ss.start + ss.duration * 60000 - Date.now() > 0);
+  const isExemptRoute = ["/control", "/login"].includes(router.pathname);
 
-  if (isMaintenanceMode && !isSuperAdminInSession) {
+  if (isMaintenanceMode && !isSuperAdminInSession && !isExemptRoute) {
     return (
       <CacheProvider value={emotionCache}>
         <ThemeProvider theme={muiTheme}>
