@@ -3,7 +3,7 @@ import prisma from "../../../prisma";
 // Requires active super admin session (ss context)
 export const updateInstanceSettings = async (
   parent,
-  { landingGroupId, allowOrganizationCreation },
+  { landingGroupId, allowOrganizationCreation, maintenanceMode },
   { ss }
 ) => {
   if (!ss) {
@@ -19,6 +19,9 @@ export const updateInstanceSettings = async (
     if (allowOrganizationCreation !== undefined) {
       updateData.allowOrganizationCreation = allowOrganizationCreation;
     }
+    if (maintenanceMode !== undefined) {
+      updateData.maintenanceMode = maintenanceMode;
+    }
 
     return await prisma.instanceSettings.upsert({
       where: { id: "singleton" },
@@ -27,6 +30,7 @@ export const updateInstanceSettings = async (
         id: "singleton",
         landingGroupId,
         allowOrganizationCreation: allowOrganizationCreation ?? true,
+        maintenanceMode: maintenanceMode ?? false,
       },
       include: { landingGroup: true },
     });

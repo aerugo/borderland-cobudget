@@ -40,6 +40,7 @@ const GET_INSTANCE_SETTINGS = gql`
         logo
       }
       allowOrganizationCreation
+      maintenanceMode
     }
   }
 `;
@@ -48,10 +49,12 @@ const UPDATE_INSTANCE_SETTINGS = gql`
   mutation UpdateInstanceSettings(
     $landingGroupId: String
     $allowOrganizationCreation: Boolean
+    $maintenanceMode: Boolean
   ) {
     updateInstanceSettings(
       landingGroupId: $landingGroupId
       allowOrganizationCreation: $allowOrganizationCreation
+      maintenanceMode: $maintenanceMode
     ) {
       id
       landingGroupId
@@ -62,6 +65,7 @@ const UPDATE_INSTANCE_SETTINGS = gql`
         logo
       }
       allowOrganizationCreation
+      maintenanceMode
     }
   }
 `;
@@ -105,6 +109,7 @@ function ControlPage({ currentUser }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [allowOrganizationCreation, setAllowOrganizationCreation] =
     useState<boolean>(true);
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
 
   // New organization form state
   const [newOrgName, setNewOrgName] = useState("");
@@ -154,6 +159,9 @@ function ControlPage({ currentUser }) {
           settingsData.instanceSettings.allowOrganizationCreation
         );
       }
+      if (settingsData.instanceSettings.maintenanceMode !== undefined) {
+        setMaintenanceMode(settingsData.instanceSettings.maintenanceMode);
+      }
     }
   }, [settingsData]);
 
@@ -164,6 +172,7 @@ function ControlPage({ currentUser }) {
     const result = await updateSettings({
       landingGroupId: selectedGroupId,
       allowOrganizationCreation: allowOrganizationCreation,
+      maintenanceMode: maintenanceMode,
     });
 
     if (result.error) {
@@ -343,6 +352,52 @@ function ControlPage({ currentUser }) {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Maintenance Mode */}
+              <div className={`p-4 rounded-lg border-2 ${maintenanceMode ? "border-red-500 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
+                <h2 className="text-lg font-medium mb-2">
+                  <FormattedMessage defaultMessage="Maintenance Mode" />
+                </h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  <FormattedMessage defaultMessage="When enabled, all users except super admins will see a maintenance page and cannot interact with the site." />
+                </p>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={maintenanceMode}
+                    onChange={(e) => setMaintenanceMode(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className={`text-sm font-medium ${maintenanceMode ? "text-red-700" : ""}`}>
+                    <FormattedMessage defaultMessage="Enable maintenance mode" />
+                  </span>
+                </label>
+
+                {maintenanceMode && (
+                  <div className="mt-3 p-3 bg-red-100 rounded-lg">
+                    <p className="text-sm text-red-800 font-medium">
+                      <FormattedMessage defaultMessage="Warning: When saved, all non-admin users will be blocked from using the site." />
+                    </p>
+                  </div>
+                )}
+
+                {maintenanceMode !== (currentSettings?.maintenanceMode ?? false) && (
+                  <Button
+                    onClick={handleSave}
+                    loading={updating}
+                    disabled={updating}
+                    className="mt-4"
+                    color={maintenanceMode ? "red" : undefined}
+                  >
+                    {maintenanceMode ? (
+                      <FormattedMessage defaultMessage="Save & Enable Maintenance" />
+                    ) : (
+                      <FormattedMessage defaultMessage="Save & Disable Maintenance" />
+                    )}
+                  </Button>
+                )}
+              </div>
+
               <div>
                 <h2 className="text-lg font-medium mb-2">
                   <FormattedMessage defaultMessage="Landing Page Settings" />

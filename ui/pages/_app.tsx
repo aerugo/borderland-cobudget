@@ -186,6 +186,14 @@ const GET_SUPER_ADMIN_SESSION = gql`
   }
 `;
 
+const GET_MAINTENANCE_STATUS = gql`
+  query GetMaintenanceStatus {
+    instanceSettings {
+      maintenanceMode
+    }
+  }
+`;
+
 interface MyAppProps {
   Component: any;
   pageProps: any;
@@ -211,6 +219,8 @@ const MyApp = ({ Component, pageProps, router, emotionCache = clientSideEmotionC
 
   const [{ data: ssQuery }] = useQuery({ query: GET_SUPER_ADMIN_SESSION });
   const ss = ssQuery?.getSuperAdminSession;
+
+  const [{ data: maintenanceData }] = useQuery({ query: GET_MAINTENANCE_STATUS });
 
   const [
     { data: currentUserData, fetching: fetchingUser, error: errorUser },
@@ -305,6 +315,37 @@ const MyApp = ({ Component, pageProps, router, emotionCache = clientSideEmotionC
   if (error) {
     console.error("Top level query failed:", error);
     return error.message;
+  }
+
+  const isMaintenanceMode = maintenanceData?.instanceSettings?.maintenanceMode === true;
+  const isSuperAdminInSession = currentUser?.isSuperAdmin && ss &&
+    (ss.start + ss.duration * 60000 - Date.now() > 0);
+
+  if (isMaintenanceMode && !isSuperAdminInSession) {
+    return (
+      <CacheProvider value={emotionCache}>
+        <ThemeProvider theme={muiTheme}>
+          <CssBaseline />
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "100vh",
+            padding: "2rem",
+            textAlign: "center",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "1rem" }}>
+              Under Maintenance
+            </h1>
+            <p style={{ color: "#6b7280", maxWidth: "400px" }}>
+              We are currently performing maintenance. Please check back shortly.
+            </p>
+          </div>
+        </ThemeProvider>
+      </CacheProvider>
+    );
   }
 
   return (

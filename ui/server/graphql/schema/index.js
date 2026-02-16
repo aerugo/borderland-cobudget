@@ -154,7 +154,7 @@ const schema = gql`
 
     endSuperAdminSession: SuperAdminSession
 
-    updateInstanceSettings(landingGroupId: String, allowOrganizationCreation: Boolean): InstanceSettings
+    updateInstanceSettings(landingGroupId: String, allowOrganizationCreation: Boolean, maintenanceMode: Boolean): InstanceSettings
 
     createGroup(
       name: String!
@@ -973,6 +973,7 @@ const schema = gql`
     landingGroupId: String
     landingGroup: Group
     allowOrganizationCreation: Boolean
+    maintenanceMode: Boolean
     updatedAt: Date
   }
 
