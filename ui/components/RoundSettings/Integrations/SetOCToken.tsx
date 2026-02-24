@@ -21,6 +21,9 @@ const SetOCToken = ({ closeModal, round }) => {
   const [{ fetching }, editRound] = useMutation(EDIT_ROUND);
   const { handleSubmit, register } = useForm();
   const intl = useIntl();
+  const { ref: ocTokenRef, ...ocTokenProps } = register("ocToken", {
+    required: true,
+  });
 
   return (
     <Card>
@@ -75,11 +78,11 @@ const SetOCToken = ({ closeModal, round }) => {
         >
           <Box m="15px 0">
             <TextField
-              name="ocToken"
               label={intl.formatMessage({
                 defaultMessage: "Your opencollective token",
               })}
-              inputRef={register("ocToken").ref}
+              inputRef={ocTokenRef}
+              {...ocTokenProps}
               fullWidth
               variant="outlined"
             />

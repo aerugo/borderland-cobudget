@@ -117,6 +117,9 @@ export const createRound = async (
 export const editOCToken = combineResolvers(
   isCollOrGroupAdmin,
   async (parent, { roundId, ocToken }) => {
+    if (!ocToken || !ocToken.trim()) {
+      throw new Error("Token is required");
+    }
     const result = await getCollective({ slug: "cobudget" }, ocToken);
     if (result?.error) {
       if (result.error.status === UNAUTHORIZED_STATUS) {
