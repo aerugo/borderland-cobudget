@@ -48,6 +48,10 @@ const SetOpenCollective = ({ closeModal, round }) => {
   const [{ fetching }, editRound] = useMutation(EDIT_ROUND);
   const { handleSubmit, register } = useForm();
   const intl = useIntl();
+  const { ref: ocCollectiveURLRef, ...ocCollectiveURLProps } = register(
+    "ocCollectiveURL",
+    { required: true }
+  );
 
   const openCollectiveURL = useMemo(() => {
     const ocCollective = round?.ocCollective;
@@ -141,12 +145,12 @@ const SetOpenCollective = ({ closeModal, round }) => {
         >
           <Box m="15px 0">
             <TextField
-              name="ocCollectiveURL"
               label={intl.formatMessage({
                 defaultMessage: "Collective or project URL",
               })}
               defaultValue={openCollectiveURL}
-              inputRef={register("ocCollectiveURL").ref}
+              inputRef={ocCollectiveURLRef}
+              {...ocCollectiveURLProps}
               fullWidth
               variant="outlined"
             />
