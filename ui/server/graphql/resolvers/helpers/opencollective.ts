@@ -149,10 +149,16 @@ export const GET_EXPENSE = `
 `;
 
 const handleOCError = (err) => {
-  if (err.response.status == 401) {
+  const status = err.response?.status;
+  if (status === 401) {
     return { error: { status: 401, message: UNAUTHORIZED } };
   }
-  return null;
+  return {
+    error: {
+      status: status || 500,
+      message: err.message || "Unknown Open Collective API error",
+    },
+  };
 };
 
 export const getCollective = async (

@@ -117,9 +117,12 @@ export const createRound = async (
 export const editOCToken = combineResolvers(
   isCollOrGroupAdmin,
   async (parent, { roundId, ocToken }) => {
-    const { error } = await getCollective({ slug: "cobudget" }, ocToken);
-    if (error?.status === UNAUTHORIZED_STATUS) {
-      throw new Error(UNAUTHORIZED);
+    const result = await getCollective({ slug: "cobudget" }, ocToken);
+    if (result?.error) {
+      if (result.error.status === UNAUTHORIZED_STATUS) {
+        throw new Error(UNAUTHORIZED);
+      }
+      throw new Error("Failed to validate token with Open Collective");
     }
     return prisma.round.update({
       where: { id: roundId },
@@ -154,16 +157,20 @@ export const editRound = combineResolvers(
 
     let ocCollectiveId, ocProjectId;
     if (ocCollectiveSlug) {
-      const collective = await getCollective(
+      const result = await getCollective(
         { slug: ocCollectiveSlug },
         getOCToken(existingRound)
       );
-      if (collective) {
-        ocCollectiveId = collective.id;
+      if (result?.error) {
+        if (result.error.status === 401) {
+          throw new Error(UNAUTHORIZED);
+        }
+        throw new Error("Failed to fetch collective from Open Collective");
+      }
+      if (result?.id) {
+        ocCollectiveId = result.id;
         ocProjectId = null;
       } else {
-        // If collective slug is provided and collective not found
-        // throw error
         throw new Error("Collective not found");
       }
     } else if (ocCollectiveSlug === "") {
