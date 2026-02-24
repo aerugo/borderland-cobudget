@@ -1,15 +1,25 @@
+import Button from "components/Button";
 import FormattedCurrency from "components/FormattedCurrency";
 import IconButton from "components/IconButton";
 import { ChevronArrowLeftIcon, EditIcon } from "components/Icons";
 import { useRouter } from "next/router";
-import React, { useState } from "react";
-import { FormattedMessage } from "react-intl";
-import { gql, useQuery } from "urql";
+import React, { useContext, useState } from "react";
+import AppContext from "contexts/AppContext";
+import { FormattedMessage, useIntl } from "react-intl";
+import { gql, useQuery, useMutation } from "urql";
 import dayjs from "dayjs";
 import ExpenseStatus from "./ExpenseStatus";
 import { Modal } from "@mui/material";
 import AddEditExpense from "./AddEditExpense";
 import EditReceipt from "./EditReceipt";
+
+const DELETE_EXPENSE = gql`
+  mutation DELETE_EXPENSE($id: String!) {
+    deleteExpense(id: $id) {
+      id
+    }
+  }
+`;
 
 const GET_EXPENSE = gql`
   query GET_EXPENSE($expenseId: String!) {
@@ -45,9 +55,12 @@ const GET_EXPENSE = gql`
 
 function ExpenseDetails({ expenseId, round, currentUser }) {
   const router = useRouter();
+  const intl = useIntl();
+  const { ss } = useContext(AppContext);
 
   const [expenseToEdit, setExpenseToEdit] = useState();
   const [receiptToEdit, setReceiptToEdit] = useState();
+  const [{ fetching: deleting }, deleteExpense] = useMutation(DELETE_EXPENSE);
   const [{ fetching, data }] = useQuery({
     query: GET_EXPENSE,
     variables: { expenseId: expenseId },
@@ -66,6 +79,21 @@ function ExpenseDetails({ expenseId, round, currentUser }) {
 
   const handleEditExpense = () => {
     setExpenseToEdit(expense);
+  };
+
+  const handleDeleteExpense = async () => {
+    const confirmed = window.confirm(
+      intl.formatMessage({
+        defaultMessage:
+          "Are you sure you want to delete this expense? This action cannot be undone.",
+      })
+    );
+    if (!confirmed) return;
+
+    const result = await deleteExpense({ id: expenseId });
+    if (!result.error) {
+      handleBack();
+    }
   };
 
   const isSubmittedByCurrentUser =
@@ -93,8 +121,17 @@ function ExpenseDetails({ expenseId, round, currentUser }) {
           <p className="ml-2 mt-0.5">{expense?.title}</p>
         </div>
 
-        <div className="mt-4 flex">
+        <div className="mt-4 flex justify-between items-center">
           <ExpenseStatus expense={expense} currentUser={currentUser} />
+          {currentUser?.isSuperAdmin && ss && (
+            <Button
+              onClick={handleDeleteExpense}
+              disabled={deleting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              <FormattedMessage defaultMessage="Delete Expense" />
+            </Button>
+          )}
         </div>
 
         {/*Receipts*/}

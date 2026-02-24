@@ -30,3 +30,5 @@ export const COLLECTIVE_NOT_FOUND = "Collective not found";
 export const GRAPHQL_COLLECTIVE_NOT_VERIFIED = "Collective not verified";
 export const GRAPHQL_OC_NOT_INTEGRATED =
   "Opencollective is not integrated for this round";
+export const GRAPHQL_SUPERADMIN_ONLY =
+  "Only super admins can perform this action";
