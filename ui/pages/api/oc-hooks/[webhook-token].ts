@@ -2,13 +2,21 @@ import { verify } from "server/utils/jwt";
 import { handleExpenseChange } from "server/webhooks/ochandlers";
 
 async function handleOCExpense(req, res) {
-  const payload = verify(req.query["webhook-token"]);
-  if (payload.rid) {
-    req.roundId = payload.rid;
-    await handleExpenseChange(req, res);
-  } else {
-    res.send({ status: "error" });
+  console.log("[OC Webhook] Incoming request:", req.method, req.url);
+
+  if (req.method !== "POST") {
+    return res.status(405).send({ status: "error", message: "Method not allowed" });
   }
+
+  const token = req.query["webhook-token"];
+  const payload = verify(token);
+  if (!payload || !payload.rid) {
+    console.log("[OC Webhook] Invalid token. Payload:", payload);
+    return res.status(401).send({ status: "error", message: "Invalid webhook token" });
+  }
+
+  req.roundId = payload.rid;
+  await handleExpenseChange(req, res);
 }
 
 export default handleOCExpense;
