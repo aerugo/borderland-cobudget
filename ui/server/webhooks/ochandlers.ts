@@ -67,37 +67,21 @@ export const ocItemToCobudgetReceipt = (item, expense) => {
 
 export const handleExpenseChange = async (req, res) => {
   try {
-    console.log(
-      "[OC Webhook] Received:",
-      JSON.stringify({
-        roundId: req.roundId,
-        type: req.body?.type,
-        expenseId: req.body?.data?.expense?.id,
-      })
-    );
-
     const round = await prisma.round.findFirst({ where: { id: req.roundId } });
     if (!round) {
-      console.log("[OC Webhook] Round not found:", req.roundId);
       return res.status(404).send({ status: "error", message: "Round not found" });
     }
 
     const expenseId = req.body?.data?.expense?.id;
     if (!expenseId) {
-      console.log("[OC Webhook] No expense id in payload. Body:", JSON.stringify(req.body));
       return res.status(400).send({ status: "error", message: "Expense id missing" });
     }
 
     const token = getOCToken(round);
-    console.log("[OC Webhook] Fetching expense", expenseId, "with token:", token ? "present" : "MISSING");
-
     const expense = await getExpense(expenseId, token);
     if (!expense) {
-      console.log("[OC Webhook] Failed to fetch expense from OC API. ID:", expenseId);
       return res.status(502).send({ status: "error", message: "Failed to fetch expense from OC" });
     }
-
-    console.log("[OC Webhook] Fetched expense:", expense.id, expense.description, "status:", expense.status);
 
     let dbExpense;
     const rates =
@@ -163,10 +147,8 @@ export const handleExpenseChange = async (req, res) => {
         where: { id: existingExpense.id },
         data: expenseData,
       });
-      console.log("[OC Webhook] Updated expense:", dbExpense.id);
     } else {
       dbExpense = await prisma.expense.create({ data: expenseData });
-      console.log("[OC Webhook] Created expense:", dbExpense.id);
     }
 
     await Promise.all(
@@ -188,10 +170,9 @@ export const handleExpenseChange = async (req, res) => {
       })
     );
 
-    console.log("[OC Webhook] Success for expense:", expense.id);
     res.send({ status: "success" });
   } catch (err) {
-    console.error("[OC Webhook] Error:", err?.message || err, err?.stack);
-    res.status(500).send({ status: "fail", message: err?.message });
+    console.error("[OC Webhook] Error:", err?.message || err);
+    res.status(500).send({ status: "fail" });
   }
 };
