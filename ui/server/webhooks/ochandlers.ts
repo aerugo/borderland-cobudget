@@ -139,32 +139,29 @@ export const handleExpenseChange = async (req, res) => {
         dbExpense = await prisma.expense.create({ data: expenseData });
       }
 
-      const items = expense.items.map(async (item) => {
-        const existing = await prisma.expenseReceipt.findFirst({
-          where: { ocExpenseReceiptId: item.id },
-        });
+      await Promise.all(
+        expense.items.map(async (item) => {
+          const receiptData = {
+            description: item.description,
+            amount: item.amount,
+            date: item.createdAt,
+            attachment: item.file?.url,
+            expenseId: dbExpense.id as string,
+            ocExpenseReceiptId: item.id,
+          };
 
-        const receiptData = {
-          description: item.description,
-          amount: item.amount,
-          date: item.createdAt,
-          attachment: item.file?.url,
-          expenseId: dbExpense.id as string,
-          ocExpenseReceiptId: item.id,
-        };
+          await prisma.expenseReceipt.upsert({
+            where: { ocExpenseReceiptId: item.id },
+            create: receiptData,
+            update: receiptData,
+          });
+        })
+      );
 
-        await prisma.expenseReceipt.upsert({
-          where: { ocExpenseReceiptId: item.id },
-          create: receiptData,
-          update: receiptData,
-        });
-
-        return {};
-      });
+      res.send({ status: "success" });
     } else {
-      // log this error
-      // throw new Error("Expense id missing");
-      return {};
+      console.log("Webhook received without expense id");
+      res.send({ status: "error", message: "Expense id missing" });
     }
   } catch (err) {
     console.log(err);
