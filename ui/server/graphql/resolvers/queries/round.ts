@@ -324,32 +324,31 @@ export const exchangeRates = async (_, { currencies }) => {
   return response;
 };
 
-export const expensesCount = async (_, { roundId }, { user }) => {
-  const roundMember = await prisma.roundMember.findUnique({
-    where: {
-      userId_roundId: {
-        userId: user.id,
-        roundId,
-      },
-    },
-    include: {
-      round: {
-        select: {
-          openCollectiveId: true,
-          openCollectiveProjectId: true,
-          ocVerified: true,
-          ocToken: true,
-          currency: true,
-        },
-      },
+export const expensesCount = async (_, { roundId }, { user, ss }) => {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: {
+      openCollectiveId: true,
+      openCollectiveProjectId: true,
+      ocVerified: true,
+      ocToken: true,
+      currency: true,
     },
   });
 
-  const isAdmin = roundMember.isAdmin;
-  const round = roundMember.round;
+  if (!ss) {
+    const roundMember = await prisma.roundMember.findUnique({
+      where: {
+        userId_roundId: {
+          userId: user.id,
+          roundId,
+        },
+      },
+    });
 
-  if (!isAdmin) {
-    throw new Error(GRAPHQL_ADMIN_ONLY);
+    if (!roundMember?.isAdmin) {
+      throw new Error(GRAPHQL_ADMIN_ONLY);
+    }
   }
 
   if (!round.openCollectiveId) {
@@ -365,6 +364,10 @@ export const expensesCount = async (_, { roundId }, { user }) => {
     round.openCollectiveProjectId,
     getOCToken(round)
   );
+
+  if (!collective?.slug) {
+    throw new Error("Failed to fetch collective from Open Collective");
+  }
 
   return getExpensesCount(collective.slug, getOCToken(round));
 };
