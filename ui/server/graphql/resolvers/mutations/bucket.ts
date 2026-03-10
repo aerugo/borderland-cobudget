@@ -90,6 +90,7 @@ export const createBucket = combineResolvers(
       currentGroupMember,
       bucket: bucket,
       round: round,
+      user: user,
     });
 
     return bucket;
