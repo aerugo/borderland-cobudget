@@ -15,6 +15,7 @@ import Discourse from "./Discourse";
 import Integrations from "./Integrations";
 import AppContext from "contexts/AppContext";
 import GroupSettings from "./GroupSettings";
+import WelcomeEmail from "./WelcomeEmail";
 import RoundSuperAdmin from "./SuperAdmin";
 
 const RoundSettings = ({
@@ -60,6 +61,11 @@ const RoundSettings = ({
         slug: "guidelines",
         name: intl.formatMessage({ defaultMessage: "Guidelines" }),
         component: Guidelines,
+      },
+      {
+        slug: "welcome-email",
+        name: intl.formatMessage({ defaultMessage: "Welcome Email" }),
+        component: WelcomeEmail,
       },
       {
         slug: "bucket-review",
