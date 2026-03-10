@@ -255,9 +255,6 @@ model Round {
   maxMembers      Int?
   maxFreeBuckets  Int?
 
-  welcomeEmailSubject String?
-  welcomeEmailBody    String?
-
   @@unique([groupId, slug])
   @@map("Collection")
 }

@@ -22,8 +22,5 @@ export default {
     eventHub.subscribe("contribute-to-bucket", "email", async (args) => {
       await emailService.contributionToBucketNotification(args);
     });
-    eventHub.subscribe("create-bucket", "welcome-email", async (args) => {
-      await emailService.sendBucketCreationWelcomeEmail(args);
-    });
   },
 };

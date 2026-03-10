@@ -152,8 +152,6 @@ export const editRound = combineResolvers(
       discourseCategoryId,
       ocCollectiveSlug,
       ocProjectSlug,
-      welcomeEmailSubject,
-      welcomeEmailBody,
     }
   ) => {
     const existingRound = await prisma.round.findFirst({
@@ -217,8 +215,6 @@ export const editRound = combineResolvers(
         color,
         bucketReviewIsOpen,
         discourseCategoryId,
-        welcomeEmailSubject,
-        welcomeEmailBody,
       },
     });
   }

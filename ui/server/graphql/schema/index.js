@@ -198,8 +198,6 @@ const schema = gql`
       discourseCategoryId: Int
       ocCollectiveSlug: String
       ocProjectSlug: String
-      welcomeEmailSubject: String
-      welcomeEmailBody: String
     ): Round!
     resetRoundFunding(roundId: ID!): [Transaction]
     deleteRound(roundId: ID!): Round
@@ -522,8 +520,6 @@ const schema = gql`
     membersLimit: MembersLimit
     bucketsLimit: ResourceLimit
     expenses: [Expense]
-    welcomeEmailSubject: String
-    welcomeEmailBody: String
   }
 
   type InvitationLink {

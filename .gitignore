@@ -39,4 +39,3 @@ cypress/screenshots/
 cypress/fixtures/
 .aider*
 .env
-.envrc
