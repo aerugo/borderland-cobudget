@@ -131,9 +131,10 @@ const WelcomeEmail = ({
 
       <div className="grid gap-4">
         <TextField
+          key={bodyKey}
           label={intl.formatMessage({ defaultMessage: "Subject" })}
           placeholder={intl.formatMessage({ defaultMessage: "Welcome to the round!" })}
-          value={subject}
+          defaultValue={subject}
           onChange={(e) => setSubject(e.target.value)}
           color={round?.color}
         />
