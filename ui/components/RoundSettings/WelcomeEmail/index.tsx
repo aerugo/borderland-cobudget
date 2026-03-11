@@ -20,6 +20,12 @@ export const GET_ROUND_WELCOME_EMAIL = gql`
   }
 `;
 
+export const SEND_TEST_WELCOME_EMAIL = gql`
+  mutation SendTestWelcomeEmail($roundId: ID!) {
+    sendTestWelcomeEmail(roundId: $roundId)
+  }
+`;
+
 export const EDIT_WELCOME_EMAIL = gql`
   mutation EditWelcomeEmail(
     $roundId: ID!
@@ -50,6 +56,7 @@ const WelcomeEmail = ({
   const intl = useIntl();
   const router = useRouter();
   const [, editRound] = useMutation(EDIT_WELCOME_EMAIL);
+  const [{ fetching: sendingTest }, sendTestEmail] = useMutation(SEND_TEST_WELCOME_EMAIL);
 
   const [{ data, fetching }] = useQuery({
     query: GET_ROUND_WELCOME_EMAIL,
@@ -156,7 +163,7 @@ const WelcomeEmail = ({
         </div>
       </div>
 
-      <div className="flex gap-3 mt-6">
+      <div className="flex gap-3 mt-6 flex-wrap">
         <Button
           onClick={handleSave}
           color={round?.color}
@@ -165,13 +172,31 @@ const WelcomeEmail = ({
         </Button>
 
         {(round?.welcomeEmailSubject || round?.welcomeEmailBody) && (
-          <Button
-            variant="secondary"
-            onClick={handleClear}
-            color={round?.color}
-          >
-            <FormattedMessage defaultMessage="Disable" />
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                sendTestEmail({ roundId: round.id }).then(({ error }) => {
+                  if (error) {
+                    toast.error(error.message);
+                  } else {
+                    toast.success(intl.formatMessage({ defaultMessage: "Test email sent to your inbox!" }));
+                  }
+                });
+              }}
+              loading={sendingTest}
+              color={round?.color}
+            >
+              <FormattedMessage defaultMessage="Send test email" />
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleClear}
+              color={round?.color}
+            >
+              <FormattedMessage defaultMessage="Disable" />
+            </Button>
+          </>
         )}
       </div>
     </div>

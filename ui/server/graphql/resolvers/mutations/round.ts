@@ -1485,3 +1485,24 @@ export const setRoundPosition = combineResolvers(
     return round;
   }
 );
+
+export const sendTestWelcomeEmail = async (_, { roundId }, { user }) => {
+  if (!user) throw new Error("Not authenticated");
+
+  const round = await prisma.round.findFirst({
+    where: { id: roundId },
+    include: { group: true },
+  });
+
+  if (!round?.welcomeEmailBody) {
+    throw new Error("No welcome email configured for this round");
+  }
+
+  await emailService.sendBucketCreationWelcomeEmail({
+    round,
+    user,
+    skipFirstBucketCheck: true,
+  });
+
+  return true;
+};

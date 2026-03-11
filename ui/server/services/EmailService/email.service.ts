@@ -693,6 +693,7 @@ export default {
     round,
     user,
     bucket,
+    skipFirstBucketCheck = false,
   }: {
     round: {
       id: string;
@@ -703,27 +704,31 @@ export default {
       group: { slug: string };
     };
     user: { id: string; name?: string; email: string };
-    bucket: { id: string; title: string };
+    bucket?: { id: string; title: string };
+    skipFirstBucketCheck?: boolean;
   }) => {
     // Feature is disabled if no welcome email body is set
     if (!round.welcomeEmailBody) return;
 
-    // Only send on the user's first bucket in this round
-    const existingBuckets = await prisma.bucket.count({
-      where: {
-        roundId: round.id,
-        cocreators: { some: { userId: user.id } },
-        id: { not: bucket.id },
-      },
-    });
-    if (existingBuckets > 0) return;
+    // Only send on the user's first bucket in this round (unless bypassed for test sends)
+    if (!skipFirstBucketCheck) {
+      const existingBuckets = await prisma.bucket.count({
+        where: {
+          roundId: round.id,
+          cocreators: { some: { userId: user.id } },
+          ...(bucket ? { id: { not: bucket.id } } : {}),
+        },
+      });
+      if (existingBuckets > 0) return;
+    }
 
-    const bucketLink = appLink(
-      `/${round.group.slug}/${round.slug}/${bucket.id}`
-    );
+    const bucketLink = bucket
+      ? appLink(`/${round.group.slug}/${round.slug}/${bucket.id}`)
+      : appLink(`/${round.group.slug}/${round.slug}`);
     const htmlBody = await mdToHtml(round.welcomeEmailBody);
     const subject =
       round.welcomeEmailSubject || `Welcome to ${round.title}!`;
+    const bucketName = process.env.BUCKET_NAME_SINGULAR || "bucket";
 
     await sendEmail({
       to: user.email,
@@ -731,10 +736,7 @@ export default {
       html: `Hi${user.name ? ` ${escape(user.name)}` : ""}!
       <br/><br/>
       ${htmlBody}
-      <br/><br/>
-      <a href="${bucketLink}">View your ${
-        process.env.BUCKET_NAME_SINGULAR || "bucket"
-      }: ${escape(bucket.title)}</a>
+      ${bucket ? `<br/><br/><a href="${bucketLink}">View your ${bucketName}: ${escape(bucket.title)}</a>` : `<br/><br/><a href="${bucketLink}">View the round</a>`}
       <br/><br/>
       ${footer}
       `,

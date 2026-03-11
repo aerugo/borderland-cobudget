@@ -201,6 +201,7 @@ const schema = gql`
       welcomeEmailSubject: String
       welcomeEmailBody: String
     ): Round!
+    sendTestWelcomeEmail(roundId: ID!): Boolean
     resetRoundFunding(roundId: ID!): [Transaction]
     deleteRound(roundId: ID!): Round
 
