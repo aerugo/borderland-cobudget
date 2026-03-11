@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { gql } from "graphql-tag";
-import { Box, Button } from "@mui/material";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useRouter } from "next/router";
+import toast from "react-hot-toast";
 
-import Wysiwyg from "components/Wysiwyg";
-import Card from "components/styled/Card";
+import Button from "components/Button";
+import TextField from "components/TextField";
 import Spinner from "components/Spinner";
 
 export const GET_ROUND_WELCOME_EMAIL = gql`
@@ -61,22 +61,16 @@ const WelcomeEmail = ({
 
   const round = data?.round ?? roundProp;
 
-  const [subject, setSubject] = useState<string>(
-    () => round?.welcomeEmailSubject || ""
-  );
-  const [body, setBody] = useState<string>(
-    () => round?.welcomeEmailBody || ""
-  );
+  const [subject, setSubject] = useState<string>(() => roundProp?.welcomeEmailSubject || "");
+  const [body, setBody] = useState<string>(() => roundProp?.welcomeEmailBody || "");
 
-  // Sync state when round data loads from server
-  const [initialized, setInitialized] = useState(false);
-  if (!initialized && data?.round) {
+  // Sync from server once loaded
+  const synced = useRef(false);
+  if (!synced.current && data?.round) {
     setSubject(data.round.welcomeEmailSubject || "");
     setBody(data.round.welcomeEmailBody || "");
-    setInitialized(true);
+    synced.current = true;
   }
-
-  if (fetching && !round) return <Spinner />;
 
   const handleSave = () => {
     editRound({
@@ -85,91 +79,85 @@ const WelcomeEmail = ({
       welcomeEmailBody: body || null,
     }).then(({ error }) => {
       if (error) {
-        console.error({ error });
-        alert(error.message);
+        toast.error(error.message);
+      } else {
+        toast.success(intl.formatMessage({ defaultMessage: "Welcome email saved!" }));
       }
     });
   };
 
   const handleClear = () => {
+    if (!confirm(intl.formatMessage({ defaultMessage: "Disable welcome email for this round?" }))) return;
     editRound({
       roundId: round.id,
       welcomeEmailSubject: null,
       welcomeEmailBody: null,
     }).then(({ error }) => {
       if (error) {
-        console.error({ error });
-        alert(error.message);
+        toast.error(error.message);
       } else {
         setSubject("");
         setBody("");
+        toast.success(intl.formatMessage({ defaultMessage: "Welcome email disabled." }));
       }
     });
   };
 
+  if (fetching && !round) return <Spinner />;
+
   return (
-    <Card>
-      <Box p={3}>
-        <h1 className="text-3xl">
-          <FormattedMessage defaultMessage="Welcome Email" />
-        </h1>
-        <p className="my-3 text-gray-600">
-          <FormattedMessage defaultMessage="Configure an email that will be sent to members when they create their first dream in this round. Leave empty to disable." />
-        </p>
+    <div className="px-6">
+      <h1 className="text-2xl font-semibold mb-2">
+        <FormattedMessage defaultMessage="Welcome Email" />
+      </h1>
+      <p className="text-gray-700 mb-6">
+        <FormattedMessage defaultMessage="Configure an email sent to members when they create their first dream in this round. Leave empty to disable." />
+      </p>
 
-        <div className="my-4">
-          <label htmlFor="welcome-email-subject" className="font-bold block mb-1">
-            <FormattedMessage defaultMessage="Subject" />
-          </label>
-          <input
-            id="welcome-email-subject"
-            type="text"
-            className="w-full border rounded p-2"
-            placeholder={intl.formatMessage({
-              defaultMessage: "Welcome to the round!",
-            })}
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-          />
-        </div>
+      <div className="grid gap-4">
+        <TextField
+          label={intl.formatMessage({ defaultMessage: "Subject" })}
+          placeholder={intl.formatMessage({ defaultMessage: "Welcome to the round!" })}
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          color={round?.color}
+        />
 
-        <div className="my-4">
-          <label className="font-bold block mb-1">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             <FormattedMessage defaultMessage="Body" />
           </label>
-          <Wysiwyg
+          <TextField
+            placeholder={intl.formatMessage({ defaultMessage: "Write your welcome message here..." })}
             defaultValue={body}
+            multiline
+            rows={10}
             onChange={(e) => setBody(e.target.value)}
-            rows={8}
-            highlightColor={round.color}
+            color={round?.color}
+            wysiwyg
           />
         </div>
+      </div>
 
-        <div className="flex gap-3">
+      <div className="flex gap-3 mt-6">
+        <Button
+          onClick={handleSave}
+          color={round?.color}
+        >
+          <FormattedMessage defaultMessage="Save" />
+        </Button>
+
+        {(round?.welcomeEmailSubject || round?.welcomeEmailBody) && (
           <Button
-            type="button"
-            size="large"
-            variant="contained"
-            color="primary"
-            onClick={handleSave}
+            variant="secondary"
+            onClick={handleClear}
+            color={round?.color}
           >
-            <FormattedMessage defaultMessage="Save" />
+            <FormattedMessage defaultMessage="Disable" />
           </Button>
-
-          {(round.welcomeEmailSubject || round.welcomeEmailBody) && (
-            <Button
-              type="button"
-              size="large"
-              variant="outlined"
-              color="error"
-              onClick={handleClear}
-            >
-              <FormattedMessage defaultMessage="Disable" />
-            </Button>
-          )}
-        </div>
-      </Box>
-    </Card>
+        )}
+      </div>
+    </div>
   );
 };
 

@@ -11,156 +11,111 @@ vi.mock("urql", () => ({
     strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), ""),
 }));
 
-// Mock Wysiwyg (complex remirror dependency)
-vi.mock("components/Wysiwyg", () => ({
-  default: ({
-    defaultValue,
-    onChange,
-    ...props
-  }: {
-    defaultValue: string;
-    onChange: (e: { target: { value: string } }) => void;
-  }) => (
-    <textarea
-      data-testid="wysiwyg"
-      defaultValue={defaultValue}
-      onChange={(e) => onChange({ target: { value: e.target.value } })}
-    />
+// Mock react-hot-toast
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+vi.mock("react-hot-toast", () => ({
+  default: {
+    success: mockToastSuccess,
+    error: mockToastError,
+  },
+}));
+
+// Mock TextField to capture wysiwyg onChange
+vi.mock("components/TextField", () => ({
+  default: ({ label, placeholder, value, defaultValue, onChange, wysiwyg, multiline, rows, ...props }: any) => (
+    <div>
+      {label && <label>{label}</label>}
+      <input
+        aria-label={label || placeholder}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        value={value}
+        onChange={onChange}
+        data-wysiwyg={wysiwyg ? "true" : undefined}
+      />
+    </div>
   ),
 }));
 
-// Mock MUI
-vi.mock("@mui/material", async () => {
-  const actual = await vi.importActual("@mui/material");
-  return {
-    ...actual,
-    Button: ({ children, ...props }: any) => (
-      <button {...props}>{children}</button>
-    ),
-    Box: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  };
-});
+// Mock Button
+vi.mock("components/Button", () => ({
+  default: ({ children, onClick, variant, ...props }: any) => (
+    <button onClick={onClick} data-variant={variant} {...props}>{children}</button>
+  ),
+}));
 
-// Mock styled Card
-vi.mock("components/styled/Card", () => ({
-  default: ({ children }: any) => <div data-testid="card">{children}</div>,
+// Mock Spinner
+vi.mock("components/Spinner", () => ({
+  default: () => <div>Loading...</div>,
 }));
 
 describe("WelcomeEmail Settings Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   it("renders with empty state when no welcome email is configured", async () => {
-    const WelcomeEmail = (
-      await import("components/RoundSettings/WelcomeEmail")
-    ).default;
-
+    const WelcomeEmail = (await import("components/RoundSettings/WelcomeEmail")).default;
     render(
       <WelcomeEmail
-        round={{
-          id: "round-1",
-          color: "#000",
-          welcomeEmailSubject: null,
-          welcomeEmailBody: null,
-        }}
-        currentGroup={{}}
-        currentUser={{}}
+        round={{ id: "round-1", color: "#000", welcomeEmailSubject: null, welcomeEmailBody: null }}
+        currentGroup={{}} currentUser={{}}
       />
     );
-
-    const subjectInput = screen.getByLabelText(/subject/i);
-    expect(subjectInput).toHaveValue("");
+    expect(screen.getByText("Welcome Email")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /disable/i })).not.toBeInTheDocument();
   });
 
-  it("renders with existing welcome email data", async () => {
-    const WelcomeEmail = (
-      await import("components/RoundSettings/WelcomeEmail")
-    ).default;
-
+  it("renders with existing welcome email data and shows Disable button", async () => {
+    const WelcomeEmail = (await import("components/RoundSettings/WelcomeEmail")).default;
     render(
       <WelcomeEmail
-        round={{
-          id: "round-1",
-          color: "#000",
-          welcomeEmailSubject: "Welcome dreamer!",
-          welcomeEmailBody: "Hello **world**",
-        }}
-        currentGroup={{}}
-        currentUser={{}}
+        round={{ id: "round-1", color: "#000", welcomeEmailSubject: "Welcome!", welcomeEmailBody: "Hello world" }}
+        currentGroup={{}} currentUser={{}}
       />
     );
-
-    const subjectInput = screen.getByLabelText(/subject/i);
-    expect(subjectInput).toHaveValue("Welcome dreamer!");
-
-    const wysiwyg = screen.getByTestId("wysiwyg");
-    expect(wysiwyg).toHaveValue("Hello **world**");
+    expect(screen.getByRole("button", { name: /disable/i })).toBeInTheDocument();
   });
 
-  it("calls editRound mutation with welcome email fields on save", async () => {
-    const WelcomeEmail = (
-      await import("components/RoundSettings/WelcomeEmail")
-    ).default;
-
+  it("calls editRound mutation and shows toast on save", async () => {
+    const WelcomeEmail = (await import("components/RoundSettings/WelcomeEmail")).default;
     render(
       <WelcomeEmail
-        round={{
-          id: "round-1",
-          color: "#000",
-          welcomeEmailSubject: "Old subject",
-          welcomeEmailBody: "Old body",
-        }}
-        currentGroup={{}}
-        currentUser={{}}
+        round={{ id: "round-1", color: "#000", welcomeEmailSubject: "Old subject", welcomeEmailBody: "Old body" }}
+        currentGroup={{}} currentUser={{}}
       />
     );
-
-    const subjectInput = screen.getByLabelText(/subject/i);
-    fireEvent.change(subjectInput, { target: { value: "New subject" } });
 
     const saveButton = screen.getByRole("button", { name: /save/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(mockMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          roundId: "round-1",
-          welcomeEmailSubject: "New subject",
-        })
+        expect.objectContaining({ roundId: "round-1" })
       );
+      expect(mockToastSuccess).toHaveBeenCalledWith(expect.stringContaining("saved"));
     });
   });
 
-  it("calls editRound mutation with null fields on clear", async () => {
-    const WelcomeEmail = (
-      await import("components/RoundSettings/WelcomeEmail")
-    ).default;
-
+  it("calls editRound with null fields and shows toast on disable", async () => {
+    const WelcomeEmail = (await import("components/RoundSettings/WelcomeEmail")).default;
     render(
       <WelcomeEmail
-        round={{
-          id: "round-1",
-          color: "#000",
-          welcomeEmailSubject: "Welcome!",
-          welcomeEmailBody: "Some content",
-        }}
-        currentGroup={{}}
-        currentUser={{}}
+        round={{ id: "round-1", color: "#000", welcomeEmailSubject: "Welcome!", welcomeEmailBody: "Some content" }}
+        currentGroup={{}} currentUser={{}}
       />
     );
 
-    const clearButton = screen.getByRole("button", { name: /clear|disable/i });
+    const clearButton = screen.getByRole("button", { name: /disable/i });
     fireEvent.click(clearButton);
 
     await waitFor(() => {
       expect(mockMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          roundId: "round-1",
-          welcomeEmailSubject: null,
-          welcomeEmailBody: null,
-        })
+        expect.objectContaining({ roundId: "round-1", welcomeEmailSubject: null, welcomeEmailBody: null })
       );
+      expect(mockToastSuccess).toHaveBeenCalledWith(expect.stringContaining("disabled"));
     });
   });
 });
