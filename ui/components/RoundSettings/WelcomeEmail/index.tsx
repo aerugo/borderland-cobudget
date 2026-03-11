@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { gql } from "graphql-tag";
 import { FormattedMessage, useIntl } from "react-intl";
@@ -64,19 +64,34 @@ const WelcomeEmail = ({
   const [subject, setSubject] = useState<string>(() => roundProp?.welcomeEmailSubject || "");
   const [body, setBody] = useState<string>(() => roundProp?.welcomeEmailBody || "");
 
+  // Keep a ref to body so handleSave always sees the latest value
+  // regardless of closure staleness
+  const bodyRef = useRef(body);
+  const handleBodyChange = (e: any) => {
+    bodyRef.current = e.target.value;
+    setBody(e.target.value);
+  };
+
   // Sync from server once loaded
   const synced = useRef(false);
-  if (!synced.current && data?.round) {
-    setSubject(data.round.welcomeEmailSubject || "");
-    setBody(data.round.welcomeEmailBody || "");
-    synced.current = true;
-  }
+  useEffect(() => {
+    if (!synced.current && data?.round) {
+      const newBody = data.round.welcomeEmailBody || "";
+      setSubject(data.round.welcomeEmailSubject || "");
+      setBody(newBody);
+      bodyRef.current = newBody;
+      synced.current = true;
+    }
+  }, [data]);
+
+  // bodyKey forces Wysiwyg to remount with correct initialContent after data loads
+  const bodyKey = synced.current ? "loaded" : "initial";
 
   const handleSave = () => {
     editRound({
       roundId: round.id,
       welcomeEmailSubject: subject || null,
-      welcomeEmailBody: body || null,
+      welcomeEmailBody: bodyRef.current || null,
     }).then(({ error }) => {
       if (error) {
         toast.error(error.message);
@@ -128,11 +143,12 @@ const WelcomeEmail = ({
             <FormattedMessage defaultMessage="Body" />
           </label>
           <TextField
+            key={bodyKey}
             placeholder={intl.formatMessage({ defaultMessage: "Write your welcome message here..." })}
             defaultValue={body}
             multiline
             rows={10}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={handleBodyChange}
             color={round?.color}
             wysiwyg
           />
