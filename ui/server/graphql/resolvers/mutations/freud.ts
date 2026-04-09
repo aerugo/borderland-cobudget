@@ -301,9 +301,114 @@ export const sendBatchEmail = async (
 };
 
 // ═══════════════════════════════════════════
-// Conversations (Phase 6 stubs)
+// Conversations
 // ═══════════════════════════════════════════
 
-export const createConversation = notImplemented;
-export const addConversationMessage = notImplemented;
-export const addBucketsToConversation = notImplemented;
+export const createConversation = async (
+  _parent,
+  { roundId, title, bucketIds, initialMessage },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+
+  const conversation = await prisma.conversation.create({
+    data: {
+      title,
+      roundId,
+      createdById: member.id,
+      buckets: { connect: bucketIds.map((id) => ({ id })) },
+      messages: {
+        create: { content: initialMessage, authorId: member.id },
+      },
+    },
+    include: {
+      buckets: true,
+      createdBy: { include: { user: true } },
+      messages: { include: { author: { include: { user: true } } } },
+      _count: { select: { messages: true } },
+    },
+  });
+
+  return {
+    ...conversation,
+    messageCount: conversation._count.messages,
+    lastMessageAt: conversation.messages[0]?.createdAt ?? null,
+  };
+};
+
+export const addConversationMessage = async (
+  _parent,
+  { conversationId, content },
+  { user, ss }
+) => {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { buckets: { include: { cocreators: true } } },
+  });
+  if (!conv) throw new Error("Conversation not found");
+
+  if (!ss) {
+    if (!user) throw new Error("You need to be logged in");
+    const member = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId: conv.roundId } },
+    });
+    const isAdminMod = member?.isAdmin || member?.isModerator;
+    const isCocreator = conv.buckets.some((b) =>
+      b.cocreators.some((cc) => cc.userId === user.id)
+    );
+    if (!isAdminMod && !isCocreator)
+      throw new Error("Not authorized to post in this conversation");
+  }
+
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId: conv.roundId } },
+  });
+
+  const message = await prisma.conversationMessage.create({
+    data: { conversationId, authorId: member.id, content },
+    include: { author: { include: { user: true } } },
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  return message;
+};
+
+export const addBucketsToConversation = async (
+  _parent,
+  { conversationId, bucketIds },
+  { user, ss }
+) => {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+  });
+  if (!conv) throw new Error("Conversation not found");
+  await assertAdminOrMod(conv.roundId, user?.id, ss);
+
+  const updated = await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { buckets: { connect: bucketIds.map((id) => ({ id })) } },
+    include: {
+      buckets: true,
+      createdBy: { include: { user: true } },
+      messages: { include: { author: { include: { user: true } } } },
+      _count: { select: { messages: true } },
+    },
+  });
+
+  return {
+    ...updated,
+    messageCount: updated._count.messages,
+    lastMessageAt:
+      updated.messages.length > 0
+        ? updated.messages[updated.messages.length - 1].createdAt
+        : null,
+  };
+};

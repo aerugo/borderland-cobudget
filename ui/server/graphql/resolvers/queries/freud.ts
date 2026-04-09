@@ -176,10 +176,90 @@ export const batchEmails = async (
   });
 };
 
-export const conversations = async (_parent, _args, _ctx) => {
-  return [];
+export const conversations = async (
+  _parent,
+  { roundId },
+  { user, ss }
+) => {
+  if (!user && !ss) throw new Error("You need to be logged in");
+
+  // Check if admin/mod — if so, show all conversations
+  let isAdminMod = false;
+  if (ss) {
+    isAdminMod = true;
+  } else {
+    const member = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId } },
+    });
+    isAdminMod = !!(member?.isAdmin || member?.isModerator);
+
+    if (!isAdminMod) {
+      // Co-creators see only conversations linked to their dreams
+      if (!member) throw new Error("Not a round member");
+      return prisma.conversation.findMany({
+        where: {
+          roundId,
+          buckets: { some: { cocreators: { some: { id: member.id } } } },
+        },
+        include: {
+          buckets: true,
+          createdBy: { include: { user: true } },
+          messages: { orderBy: { createdAt: "desc" }, take: 1, include: { author: { include: { user: true } } } },
+          _count: { select: { messages: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+    }
+  }
+
+  return prisma.conversation.findMany({
+    where: { roundId },
+    include: {
+      buckets: true,
+      createdBy: { include: { user: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, include: { author: { include: { user: true } } } },
+      _count: { select: { messages: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
 };
 
-export const conversation = async (_parent, _args, _ctx) => {
-  return null;
+export const conversation = async (
+  _parent,
+  { id },
+  { user, ss }
+) => {
+  const conv = await prisma.conversation.findUnique({
+    where: { id },
+    include: {
+      buckets: { include: { cocreators: true } },
+      createdBy: { include: { user: true } },
+      messages: {
+        include: { author: { include: { user: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      _count: { select: { messages: true } },
+    },
+  });
+  if (!conv) return null;
+
+  if (!ss) {
+    if (!user) throw new Error("You need to be logged in");
+    const member = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId: conv.roundId } },
+    });
+    const isAdminMod = member?.isAdmin || member?.isModerator;
+    const isCocreator = conv.buckets.some((b) =>
+      b.cocreators.some((cc) => cc.userId === user.id)
+    );
+    if (!isAdminMod && !isCocreator) return null;
+  }
+
+  return {
+    ...conv,
+    messageCount: conv._count.messages,
+    lastMessageAt: conv.messages.length > 0
+      ? conv.messages[conv.messages.length - 1].createdAt
+      : null,
+  };
 };
