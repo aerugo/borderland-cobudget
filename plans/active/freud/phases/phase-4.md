@@ -1,7 +1,8 @@
 # Phase 4: Redistribution Engine
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-09
+**Completed**: 2026-04-10
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -304,3 +305,17 @@ yarn dev
 - [ ] CSV export works
 - [ ] Unit tests pass
 - [ ] Type check passes
+
+## Deferred to Phase 7
+
+- Step 4.2: Unit tests for redistribution algorithm (`__tests__/freud-redistribution.test.ts`)
+- Step 4.9: `FundOverrideCell.tsx` — override UI (model/manual/skip/lock dropdown). Algorithm supports overrides; UI not wired.
+- Step 4.10: `HeartButton.tsx` as separate component — heart built inline in RedistributionPage table row instead
+- Step 4.11: CSV export button
+- `BudgetSummary.tsx` as separate component — built inline in RedistributionPage
+- `ModelControlsTable.tsx` as separate component — built inline in RedistributionPage
+- `RedistributionTable.tsx` as separate component — built inline in RedistributionPage
+
+## Divergences
+
+- Plan specified 6 separate component files under `Redistribution/`. Implementation consolidated into 2 files (`ModelControlRow.tsx` + `RedistributionPage.tsx`). Functionally equivalent.

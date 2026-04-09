@@ -1,7 +1,8 @@
 # Phase 3: Dream Review Comments
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-09
+**Completed**: 2026-04-09
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -162,3 +163,10 @@ yarn dev
 - [ ] Email notifications sent to mentioned users
 - [ ] Badge count updates correctly
 - [ ] Type check passes
+
+## Deferred to Phase 7
+
+- Step 3.3: `parseMentions()` regex function for @-mention extraction
+- Step 3.4: Email notifications for @-mentioned users
+- Step 3.7: @-mention autocomplete UI in popover input (detect "@", show dropdown, insert username)
+- Edit comment functionality (mutation implemented but no edit UI in popover)

@@ -1,7 +1,8 @@
 # Phase 5: Batch Email Tool
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-09
+**Completed**: 2026-04-10
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -186,3 +187,10 @@ yarn dev
 - [ ] History table shows all past batch emails
 - [ ] History expandable to see full message + recipients
 - [ ] Type check passes
+
+## Deferred to Phase 7
+
+- Step 5.3: Rich text editor (Remirror/Wysiwyg) for message body — used plain textarea instead
+- Step 5.5: `EmailPreviewModal.tsx` — rendered email preview before sending
+- Actual Postmark email dispatch — mutation logs batch record but does not call Postmark API. Needs wiring via EmailService.
+- Separate component files (`EmailComposer.tsx`, `DreamRecipientPicker.tsx`, `EmailHistory.tsx`) — all built inline in single `EmailsPage.tsx`

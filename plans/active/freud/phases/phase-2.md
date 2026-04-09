@@ -1,7 +1,8 @@
 # Phase 2: Dream Review Table
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-09
+**Completed**: 2026-04-09
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -241,3 +242,11 @@ yarn dev
 - [ ] Approval toggle calls approveBucket
 - [ ] Type check passes
 - [ ] No N+1 queries (verify with query logging)
+
+## Deferred to Phase 7
+
+- `DreamReviewFilters.tsx` as separate component (filters built inline in DreamReviewTable instead)
+- Approved filter dropdown (yes/no/all)
+- Published filter dropdown (yes/no/all)
+- Refresh button (re-execute query)
+- Clear all filters button (✕)

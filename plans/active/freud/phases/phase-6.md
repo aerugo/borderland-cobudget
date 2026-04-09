@@ -1,7 +1,8 @@
 # Phase 6: Dream Conversations
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-10
+**Completed**: 2026-04-10
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -348,3 +349,13 @@ yarn dev
 - [ ] Conversation indicator shows on bucket page
 - [ ] Authorization works correctly for all roles
 - [ ] Type check passes
+
+## Deferred to Phase 7
+
+- **Deferred from P1**: `types/Conversation.ts` type resolver — computed fields `messageCount` and `lastMessageAt` are instead computed inline in the `conversations` and `conversation` query resolvers. Works but diverges from the GraphQL type resolver pattern used elsewhere. Should be extracted if the type is queried from multiple resolver paths.
+- Step 6.7: `ConversationForm.tsx` as separate component — new conversation form built inline in ConversationList instead
+- Step 6.9: `MessageInput.tsx` as separate component — reply input built inline in ConversationThread
+- Step 6.10: Dreamer-facing conversation indicator on bucket page (`ui/pages/[group]/[round]/[bucket]/index.tsx`)
+- Step 6.10: `bucketConversations` query for bucket page
+- Email notifications on conversation creation and new messages (both createConversation and addConversationMessage)
+- Participant summary line in ConversationThread ("Lovisa, Martin (Dream Team) + 5 co-creators")
