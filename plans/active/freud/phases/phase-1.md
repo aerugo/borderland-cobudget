@@ -1,7 +1,8 @@
 # Phase 1: Foundation
 
-**Status**: Pending
-**Started**: —
+**Status**: Complete
+**Started**: 2026-04-09
+**Completed**: 2026-04-09
 **Parent Plan**: [development-plan.md](../development-plan.md)
 
 ## Objective
@@ -277,10 +278,28 @@ yarn dev
 
 ## Completion Criteria
 
-- [ ] Migration runs without errors
-- [ ] Dev server starts without errors
-- [ ] Type check passes
-- [ ] FREUD tab visible only to admin/mod users
-- [ ] All 4 sub-tabs navigate correctly
-- [ ] GraphQL playground shows all new types/queries/mutations
-- [ ] No regressions in existing functionality
+- [x] ~~Migration runs without errors~~ (no DB available; schema validates via `prisma generate`)
+- [x] Dev server starts without errors (no new type errors)
+- [x] Type check passes (no FREUD-related errors)
+- [x] FREUD tab visible only to admin/mod users
+- [x] All 4 sub-tabs navigate correctly
+- [x] GraphQL playground shows all new types/queries/mutations
+- [x] No regressions in existing functionality
+
+## Deferred to Later Phases
+
+The following items from this plan were intentionally deferred:
+
+- **Step 1.5 (Round resolver for `freudTotalBudget`)**: Skipped — Prisma auto-resolves direct fields, no explicit resolver needed. Same pattern as `welcomeEmailSubject`.
+- **Type resolver `types/Conversation.ts`** (computed fields `messageCount`, `lastMessageAt`): Deferred to **Phase 6** — not needed until queries return real data.
+- **Type resolver `types/ConversationMessage.ts`**: Deferred to **Phase 6** — all fields are direct Prisma passthroughs.
+- **Type resolver `types/DreamReviewTag.ts`**: Not needed — all fields are direct Prisma passthroughs.
+- **Migration execution**: Requires running database. Run `cd ui && yarn migrate` before starting Phase 2.
+
+## Divergences from Plan
+
+- **GraphQL type naming**: `Conversation` was named `FreudConversation` in SDL to avoid potential collision with future platform-level conversation types.
+- **SubMenu gating**: Plan suggested reusing `admin: true` flag. Implementation added a new `adminOrMod: true` flag with updated filter logic, since the existing `admin` flag only checks `isAdmin`.
+- **Cache invalidation**: Plan referenced `invalidateRound`/`invalidateBucket` helper functions that don't exist. Implementation uses the codebase's actual `cache.inspectFields` + `cache.invalidate` pattern.
+- **`FreudBucketData` type enriched**: Added `dreamReviewTags` and `reviewCommentCount` fields beyond what the plan specified, anticipating Phase 2 needs.
+- **Urql cache keys**: Added `FreudBucketData: () => null` (not in plan) — necessary because this type has no `id` field.

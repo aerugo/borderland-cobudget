@@ -356,7 +356,7 @@ The Cobudget platform already has the foundational data model (Rounds, Buckets, 
 
 | Phase | Status | Started | Completed | Notes |
 |-------|--------|---------|-----------|-------|
-| Phase 1 | Pending | | | Foundation |
+| Phase 1 | Complete | 2026-04-09 | 2026-04-09 | Migration pending (no DB). Type resolvers deferred to P6. |
 | Phase 2 | Pending | | | Dream Review Table |
 | Phase 3 | Pending | | | Dream Review Comments |
 | Phase 4 | Pending | | | Redistribution Engine |

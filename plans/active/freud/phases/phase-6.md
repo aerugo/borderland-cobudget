@@ -8,6 +8,14 @@
 
 Build the private conversation system between Dream Team and dreamers. Admins/mods create conversations linked to specific dreams; all co-creators of those dreams become participants. Conversations have threaded messages with email notifications. Co-creators access conversations from their dream page or via email links.
 
+## Deferred from Phase 1
+
+The following items were deferred from Phase 1 and must be completed in this phase:
+- **Create `types/Conversation.ts`** — type resolver for computed fields `messageCount` and `lastMessageAt` on `FreudConversation`
+- **Wire `FreudConversation` type resolver** into `resolvers/index.ts` (import and add to resolver map)
+
+Note: `ConversationMessage` and `DreamReviewTag` type resolvers are NOT needed — all their fields are direct Prisma passthroughs.
+
 ## Implementation Steps
 
 ### Step 6.1: Query Resolvers
