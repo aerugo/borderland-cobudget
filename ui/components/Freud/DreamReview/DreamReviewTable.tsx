@@ -313,6 +313,7 @@ export default function DreamReviewTable({
                       bucketTitle={d.bucket.title}
                       commentCount={d.reviewCommentCount}
                       currentMemberId={currentMemberId}
+                      adminModMembers={adminModMembers}
                     />
                   </TableCell>
                 </TableRow>

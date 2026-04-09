@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import Tooltip from "@tippyjs/react";
 import Avatar from "components/Avatar";
@@ -26,16 +26,14 @@ const CREATE_COMMENT = gql`
   mutation CreateDreamReviewComment($bucketId: ID!, $content: String!) {
     createDreamReviewComment(bucketId: $bucketId, content: $content) {
       id
-      content
-      createdAt
-      author {
-        id
-        user {
-          id
-          username
-          name
-        }
-      }
+    }
+  }
+`;
+
+const EDIT_COMMENT = gql`
+  mutation EditDreamReviewComment($id: ID!, $content: String!) {
+    editDreamReviewComment(id: $id, content: $content) {
+      id
     }
   }
 `;
@@ -51,14 +49,21 @@ export default function ReviewNotesPopover({
   bucketTitle,
   commentCount,
   currentMemberId,
+  adminModMembers,
 }: {
   bucketId: string;
   bucketTitle: string;
   commentCount: number;
   currentMemberId: string;
+  adminModMembers?: { id: string; user: any }[];
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [commentsResult, reexecuteComments] = useQuery({
     query: COMMENTS_QUERY,
@@ -67,14 +72,61 @@ export default function ReviewNotesPopover({
   });
 
   const [, createComment] = useMutation(CREATE_COMMENT);
+  const [, editComment] = useMutation(EDIT_COMMENT);
   const [, deleteComment] = useMutation(DELETE_COMMENT);
 
   const comments = commentsResult.data?.dreamReviewComments ?? [];
+
+  const filteredMembers = useMemo(() => {
+    if (!adminModMembers) return [];
+    if (!mentionFilter) return adminModMembers;
+    const q = mentionFilter.toLowerCase();
+    return adminModMembers.filter(
+      (m) =>
+        m.user?.username?.toLowerCase().includes(q) ||
+        m.user?.name?.toLowerCase().includes(q)
+    );
+  }, [adminModMembers, mentionFilter]);
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    // Check for @-mention trigger
+    const lastAt = value.lastIndexOf("@");
+    if (lastAt >= 0) {
+      const afterAt = value.slice(lastAt + 1);
+      if (!afterAt.includes(" ") && afterAt.length < 20) {
+        setShowMentions(true);
+        setMentionFilter(afterAt);
+        return;
+      }
+    }
+    setShowMentions(false);
+    setMentionFilter("");
+  };
+
+  const insertMention = (username: string) => {
+    const lastAt = input.lastIndexOf("@");
+    if (lastAt >= 0) {
+      setInput(input.slice(0, lastAt) + `@${username} `);
+    }
+    setShowMentions(false);
+    setMentionFilter("");
+    inputRef.current?.focus();
+  };
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
     await createComment({ bucketId, content: input.trim() });
     setInput("");
+    setShowMentions(false);
+    reexecuteComments({ requestPolicy: "network-only" });
+  };
+
+  const handleEdit = async (id: string) => {
+    if (!editContent.trim()) return;
+    await editComment({ id, content: editContent.trim() });
+    setEditingId(null);
+    setEditContent("");
     reexecuteComments({ requestPolicy: "network-only" });
   };
 
@@ -83,7 +135,12 @@ export default function ReviewNotesPopover({
     reexecuteComments({ requestPolicy: "network-only" });
   };
 
-  const content = (
+  // Render @mentions as bold in comment text
+  const renderContent = (text: string) => {
+    return text.replace(/@(\w+)/g, '<strong>@$1</strong>');
+  };
+
+  const popoverContent = (
     <div className="bg-white border rounded-lg shadow-xl w-[350px] max-h-[400px] flex flex-col">
       <div className="px-3 py-2 border-b">
         <div className="text-xs text-gray-400 truncate">{bucketTitle}</div>
@@ -111,32 +168,90 @@ export default function ReviewNotesPopover({
                 {dayjs(comment.createdAt).format("MMM D, YYYY [at] h:mm A")}
               </span>
               {comment.author?.id === currentMemberId && (
-                <button
-                  onClick={() => handleDelete(comment.id)}
-                  className="text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"
-                >
-                  ✕
-                </button>
+                <span className="flex gap-1 opacity-0 group-hover:opacity-100">
+                  <button
+                    onClick={() => {
+                      setEditingId(comment.id);
+                      setEditContent(comment.content);
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-600"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(comment.id)}
+                    className="text-xs text-red-400 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                </span>
               )}
             </div>
-            <div className="text-sm text-gray-700 ml-6">
-              {comment.content}
-            </div>
+            {editingId === comment.id ? (
+              <div className="ml-6 flex gap-1">
+                <input
+                  type="text"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="border rounded px-2 py-0.5 text-xs flex-1"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleEdit(comment.id);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                />
+                <button
+                  onClick={() => handleEdit(comment.id)}
+                  className="text-xs text-blue-600"
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <div
+                className="text-sm text-gray-700 ml-6"
+                dangerouslySetInnerHTML={{
+                  __html: renderContent(comment.content),
+                }}
+              />
+            )}
           </div>
         ))}
       </div>
-      <div className="border-t p-2">
+      <div className="border-t p-2 relative">
+        {showMentions && filteredMembers.length > 0 && (
+          <div className="absolute bottom-full left-2 right-2 bg-white border rounded shadow-lg max-h-32 overflow-y-auto mb-1">
+            {filteredMembers.map((m) => (
+              <button
+                key={m.id}
+                onClick={() =>
+                  insertMention(m.user?.username || m.user?.name || "")
+                }
+                className="flex items-center gap-2 w-full px-2 py-1 text-xs hover:bg-blue-50 text-left"
+              >
+                <Avatar user={m.user} size="xs" />
+                <span>
+                  {m.user?.name || m.user?.username}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-1">
           <input
+            ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             placeholder="Reply or @ mention someone"
             className="border rounded px-2 py-1 text-sm flex-1"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey && !showMentions) {
                 e.preventDefault();
                 handleSubmit();
+              }
+              if (e.key === "Escape") {
+                setShowMentions(false);
               }
             }}
           />
@@ -154,13 +269,13 @@ export default function ReviewNotesPopover({
 
   return (
     <Tooltip
-      content={content}
+      content={popoverContent}
       interactive
       visible={open}
       onClickOutside={() => setOpen(false)}
       placement="bottom-end"
       appendTo={() => document.body}
-      render={(attrs) => <div {...attrs}>{content}</div>}
+      render={(attrs) => <div {...attrs}>{popoverContent}</div>}
     >
       <button
         onClick={() => setOpen(!open)}

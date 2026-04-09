@@ -9,6 +9,7 @@ import Comments from "components/Bucket/Comments";
 
 import classNames from "utils/classNames";
 import Spinner from "components/Spinner";
+import BucketConversationIndicator from "components/Freud/BucketConversationIndicator";
 import { useRouter } from "next/router";
 import { initUrqlClient } from "next-urql";
 import { client as createClientConfig } from "graphql/client";
@@ -261,6 +262,13 @@ const BucketIndex = ({ head, currentUser, currentGroup }) => {
         showBucketReview={showBucketReview}
         openImageModal={() => setEditImagesModalOpen(true)}
       />
+      {bucket?.id && (
+        <BucketConversationIndicator
+          bucketId={bucket.id}
+          groupSlug={(router.query.group as string) ?? "c"}
+          roundSlug={router.query.round as string}
+        />
+      )}
       <Tab.Group
         defaultIndex={tab}
         onChange={(tab) => {
