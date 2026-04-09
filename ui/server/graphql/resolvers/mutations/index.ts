@@ -4,3 +4,4 @@ export * as roundMutations from "./round";
 export * as bucketMutations from "./bucket";
 export * as superAdminMutations from "./superAdmin";
 export * as instanceSettingsMutations from "./instanceSettings";
+export * as freudMutations from "./freud";

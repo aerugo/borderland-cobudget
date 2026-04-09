@@ -53,6 +53,8 @@ export const roundItems = (
   formatMessage
 ) => {
   const isAdmin = currentUser?.currentCollMember?.isAdmin;
+  const isModerator = currentUser?.currentCollMember?.isModerator;
+  const isAdminOrMod = isAdmin || isModerator;
   return [
     {
       label: formatMessage({ defaultMessage: "Overview" }),
@@ -85,12 +87,22 @@ export const roundItems = (
       href: `/${groupSlug}/${roundSlug}/budget-items`,
     },
     {
+      label: "FREUD",
+      href: `/${groupSlug}/${roundSlug}/freud`,
+      startsWithHref: true,
+      adminOrMod: true,
+    },
+    {
       label: formatMessage({ defaultMessage: "Settings" }),
       href: `/${groupSlug}/${roundSlug}/settings`,
       startsWithHref: true,
       admin: true,
     },
-  ].filter((i) => (i.admin ? isAdmin : true));
+  ].filter((i) => {
+    if (i.admin) return isAdmin;
+    if (i.adminOrMod) return isAdminOrMod;
+    return true;
+  });
 };
 
 export default function SubMenu({

@@ -7,3 +7,4 @@ export * as expensesQueries from "./expense";
 export * as budgetItemQueries from "./budgetItem";
 export * as instanceSettingsQueries from "./instanceSettings";
 export { randomRoundImages } from "./imageFeed";
+export * as freudQueries from "./freud";

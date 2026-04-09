@@ -61,6 +61,7 @@ export const client = (
           ResourceLimit: () => null,
           OC_Collective: () => null,
           OC_Parent: () => null,
+          FreudBucketData: () => null,
         },
         updates: {
           Mutation: {
@@ -430,6 +431,20 @@ export const client = (
                   cache.invalidate("Query", "bucket", field.arguments);
                 });
             },
+            editBucket(result: any, args, cache) {
+              // Invalidate bucket query when budgetItems are updated
+              if (args.budgetItems) {
+                cache
+                  .inspectFields("Query")
+                  .filter((field) => field.fieldName === "bucket")
+                  .filter((field) => {
+                    return field.arguments?.id === args.bucketId;
+                  })
+                  .forEach((field) => {
+                    cache.invalidate("Query", "bucket", field.arguments);
+                  });
+              }
+            },
             addComment(result: any, { content, bucketId }, cache) {
               if (result.addComment) {
                 cache.updateQuery(
@@ -536,6 +551,73 @@ export const client = (
                   cache.invalidate("Query", "membersPage", field.arguments);
                 });
             },
+            // FREUD cache invalidation
+            createDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTags" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            deleteDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTags" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            addDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            removeDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            addDreamReviewer(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            removeDreamReviewer(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            createDreamReviewComment(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            toggleFreudHeart(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudData")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            saveFreudSnapshot(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudSnapshots")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            setFreudTotalBudget(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "round")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            sendBatchEmail(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "batchEmails")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            createConversation(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "conversations")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            addConversationMessage(_result, args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "conversation")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+
             contribute(result, args, cache) {
               const queryFields = cache.inspectFields("Query");
 

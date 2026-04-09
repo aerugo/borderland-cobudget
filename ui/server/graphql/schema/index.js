@@ -124,6 +124,17 @@ const schema = gql`
       limit: Int
     ): RoundTransactionPage
     balances(groupSlug: String!): [RoundBalance]
+
+    # FREUD
+    dreamReviewTable(roundId: ID!): [FreudBucketData!]!
+    dreamReviewTags(roundId: ID!): [DreamReviewTag!]!
+    dreamReviewComments(bucketId: ID!): [DreamReviewComment!]!
+    freudData(roundId: ID!): [FreudBucketData!]!
+    freudSnapshots(roundId: ID!): [FreudSnapshot!]!
+    batchEmails(roundId: ID!): [BatchEmail!]!
+    conversations(roundId: ID!): [FreudConversation!]!
+    conversation(id: ID!): FreudConversation
+
     randomRoundImages(
       groupSlug: String!
       roundSlug: String!
@@ -419,6 +430,24 @@ const schema = gql`
     acceptTerms: User
     setEmailSetting(settingKey: String!, value: Boolean!): User
     pinBucket(bucketId: ID!, pin: Boolean!): Bucket
+
+    # FREUD
+    createDreamReviewTag(roundId: ID!, value: String!, color: String): DreamReviewTag!
+    deleteDreamReviewTag(id: ID!): DreamReviewTag!
+    addDreamReviewTag(bucketId: ID!, tagId: ID!): Bucket!
+    removeDreamReviewTag(bucketId: ID!, tagId: ID!): Bucket!
+    addDreamReviewer(bucketId: ID!, reviewerId: ID!): DreamReview!
+    removeDreamReviewer(bucketId: ID!, reviewerId: ID!): Boolean!
+    createDreamReviewComment(bucketId: ID!, content: String!): DreamReviewComment!
+    editDreamReviewComment(id: ID!, content: String!): DreamReviewComment!
+    deleteDreamReviewComment(id: ID!): Boolean!
+    toggleFreudHeart(bucketId: ID!): Boolean!
+    saveFreudSnapshot(roundId: ID!, algorithm: String!, data: JSON!): FreudSnapshot!
+    setFreudTotalBudget(roundId: ID!, amount: Int): Round!
+    sendBatchEmail(roundId: ID!, subject: String!, summary: String, message: String!, bucketIds: [ID!]!): BatchEmail!
+    createConversation(roundId: ID!, title: String!, bucketIds: [ID!]!, initialMessage: String!): FreudConversation!
+    addConversationMessage(conversationId: ID!, content: String!): ConversationMessage!
+    addBucketsToConversation(conversationId: ID!, bucketIds: [ID!]!): FreudConversation!
   }
 
   type GroupSubscriptionStatus {
@@ -525,6 +554,7 @@ const schema = gql`
     expenses: [Expense]
     welcomeEmailSubject: String
     welcomeEmailBody: String
+    freudTotalBudget: Int
   }
 
   type InvitationLink {
@@ -1092,6 +1122,86 @@ const schema = gql`
   # }
 
   # type Image {}
+
+  # ═══════════════════════════════════════════
+  # FREUD Types
+  # ═══════════════════════════════════════════
+
+  type DreamReviewTag {
+    id: ID!
+    value: String!
+    color: String!
+  }
+
+  type DreamReview {
+    id: ID!
+    reviewer: RoundMember!
+    createdAt: Date!
+  }
+
+  type DreamReviewComment {
+    id: ID!
+    author: RoundMember!
+    content: String!
+    createdAt: Date!
+    updatedAt: Date!
+  }
+
+  type FreudHeart {
+    id: ID!
+    member: RoundMember!
+  }
+
+  type FreudBucketData {
+    bucket: Bucket!
+    goal: Int!
+    stretch: Int!
+    funded: Int!
+    missing: Int!
+    funders: Int!
+    progress: Float!
+    dreamReviewTags: [DreamReviewTag!]!
+    hearts: [FreudHeart!]!
+    reviewedBy: [RoundMember!]!
+    reviewCommentCount: Int!
+  }
+
+  type FreudSnapshot {
+    id: ID!
+    algorithm: String!
+    data: JSON!
+    createdBy: RoundMember!
+    createdAt: Date!
+  }
+
+  type BatchEmail {
+    id: ID!
+    subject: String!
+    summary: String
+    message: String!
+    sentBy: RoundMember!
+    recipientCount: Int!
+    recipients: JSON
+    sentAt: Date!
+  }
+
+  type FreudConversation {
+    id: ID!
+    title: String!
+    buckets: [Bucket!]!
+    messages: [ConversationMessage!]!
+    createdBy: RoundMember!
+    messageCount: Int!
+    lastMessageAt: Date
+    createdAt: Date!
+  }
+
+  type ConversationMessage {
+    id: ID!
+    author: RoundMember!
+    content: String!
+    createdAt: Date!
+  }
 `;
 
 export default schema;

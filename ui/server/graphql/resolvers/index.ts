@@ -6,6 +6,7 @@ import {
   bucketQueries,
   budgetItemQueries,
   expensesQueries,
+  freudQueries,
   groupQueries,
   instanceSettingsQueries,
   randomRoundImages,
@@ -36,6 +37,7 @@ import {
 // mutations
 import {
   bucketMutations,
+  freudMutations,
   groupMutations,
   instanceSettingsMutations,
   roundMutations,
@@ -55,6 +57,7 @@ const resolvers = {
     ...superAdminQueries,
     ...expensesQueries,
     ...instanceSettingsQueries,
+    ...freudQueries,
     randomRoundImages,
     languageProgressPage,
   },
@@ -66,6 +69,7 @@ const resolvers = {
     ...bucketMutations,
     ...superAdminMutations,
     ...instanceSettingsMutations,
+    ...freudMutations,
   },
 
   RoundMember,
