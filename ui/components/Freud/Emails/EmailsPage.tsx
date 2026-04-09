@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import EmailPreviewModal from "./EmailPreviewModal";
+import Wysiwyg from "components/Wysiwyg";
 import {
   Table,
   TableBody,
@@ -87,6 +88,7 @@ export default function EmailsPage({ round }: { round: any }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
 
   const [bucketsResult] = useQuery({
     query: BUCKETS_QUERY,
@@ -157,6 +159,7 @@ export default function EmailsPage({ round }: { round: any }) {
         setSubject("");
         setSummary("");
         setMessage("");
+        editorRef.current?.clear();
         setSelectedBucketIds(new Set());
       }
     } catch (err) {
@@ -187,13 +190,16 @@ export default function EmailsPage({ round }: { round: any }) {
             onChange={(e) => setSummary(e.target.value)}
             className="border rounded px-3 py-2 w-full text-sm"
           />
-          <textarea
-            placeholder="Message body..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={6}
-            className="border rounded px-3 py-2 w-full text-sm"
-          />
+          <div className="border rounded">
+            <Wysiwyg
+              inputRef={editorRef}
+              defaultValue={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={6}
+              placeholder="Message body..."
+              highlightColor="blue"
+            />
+          </div>
 
           {/* Recipient picker */}
           <div>

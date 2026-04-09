@@ -13,6 +13,16 @@ const CONVERSATION_QUERY = gql`
       buckets {
         id
         title
+        cocreators {
+          id
+          isAdmin
+          isModerator
+          user {
+            id
+            username
+            name
+          }
+        }
       }
       createdBy {
         id
@@ -90,6 +100,30 @@ export default function ConversationThread({
     );
   }
 
+  // Compute participant summary
+  const teamMembers: string[] = [];
+  const cocreatorCount = new Set<string>();
+  for (const bucket of conv.buckets) {
+    for (const cc of bucket.cocreators ?? []) {
+      if (cc.isAdmin || cc.isModerator) {
+        const name = cc.user?.name || cc.user?.username;
+        if (name && !teamMembers.includes(name)) teamMembers.push(name);
+      } else {
+        cocreatorCount.add(cc.id);
+      }
+    }
+  }
+  const participantSummary = [
+    teamMembers.length > 0
+      ? `${teamMembers.join(", ")} (Dream Team)`
+      : null,
+    cocreatorCount.size > 0
+      ? `${cocreatorCount.size} co-creator${cocreatorCount.size !== 1 ? "s" : ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" + ");
+
   const handleSend = async () => {
     if (!input.trim()) return;
     await addMessage({
@@ -113,11 +147,16 @@ export default function ConversationThread({
       <div className="text-sm text-gray-500 mb-1">
         Dreams: {conv.buckets.map((b) => b.title).join(" · ")}
       </div>
-      <div className="text-xs text-gray-400 mb-6">
+      <div className="text-xs text-gray-400 mb-1">
         Started by{" "}
         {conv.createdBy?.user?.name || conv.createdBy?.user?.username} on{" "}
         {dayjs(conv.createdAt).format("MMM D, YYYY")}
       </div>
+      {participantSummary && (
+        <div className="text-xs text-gray-400 mb-6">
+          Participants: {participantSummary}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="space-y-4 mb-6">

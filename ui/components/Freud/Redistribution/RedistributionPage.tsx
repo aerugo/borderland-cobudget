@@ -11,6 +11,7 @@ import {
 import { FormattedNumber } from "react-intl";
 import ModelControlRow from "./ModelControlRow";
 import FundOverrideCell from "./FundOverrideCell";
+import { SummarySkeleton, TableSkeleton } from "../LoadingSkeleton";
 import {
   FreudDream,
   SortMethod,
@@ -138,7 +139,12 @@ export default function RedistributionPage({
   const totalAskedStretch = bucketData.reduce((s, d) => s + d.stretch, 0);
 
   if (result.fetching) {
-    return <div className="text-center text-gray-400 py-12">Loading...</div>;
+    return (
+      <>
+        <SummarySkeleton />
+        <TableSkeleton rows={8} cols={10} />
+      </>
+    );
   }
 
   if (result.error) {

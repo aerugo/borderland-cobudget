@@ -3,6 +3,7 @@ import { gql, useQuery, useMutation } from "urql";
 import Link from "next/link";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { CardListSkeleton } from "../LoadingSkeleton";
 import toast from "react-hot-toast";
 
 dayjs.extend(relativeTime);
@@ -185,7 +186,7 @@ export default function ConversationList({
 
       {/* Conversation List */}
       {convResult.fetching ? (
-        <div className="text-center text-gray-400 py-8">Loading...</div>
+        <CardListSkeleton count={3} />
       ) : conversations.length === 0 ? (
         <div className="text-center text-gray-400 py-8">
           No conversations yet. Start one to reach out to dreamers.

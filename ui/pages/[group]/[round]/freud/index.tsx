@@ -4,6 +4,7 @@ import SubMenu from "../../../../components/SubMenu";
 import FreudLayout from "../../../../components/Freud/FreudLayout";
 import BudgetSummaryPanel from "../../../../components/Freud/DreamReview/BudgetSummaryPanel";
 import DreamReviewTable from "../../../../components/Freud/DreamReview/DreamReviewTable";
+import { SummarySkeleton, TableSkeleton } from "../../../../components/Freud/LoadingSkeleton";
 
 const DREAM_REVIEW_QUERY = gql`
   query DreamReviewTable($roundId: ID!) {
@@ -113,7 +114,10 @@ const FreudReviewPage = ({ round, currentUser, currentGroup }) => {
             <div className="text-xs text-gray-400">{error.message}</div>
           </div>
         ) : loading ? (
-          <div className="text-center text-gray-400 py-12">Loading...</div>
+          <>
+            <SummarySkeleton />
+            <TableSkeleton rows={10} cols={8} />
+          </>
         ) : (
           <>
             <BudgetSummaryPanel round={round} bucketData={bucketData} />
