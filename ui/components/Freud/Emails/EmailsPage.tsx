@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { gql, useQuery, useMutation } from "urql";
+import EmailPreviewModal from "./EmailPreviewModal";
 import {
   Table,
   TableBody,
@@ -84,6 +85,7 @@ export default function EmailsPage({ round }: { round: any }) {
   );
   const [search, setSearch] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
 
   const [bucketsResult] = useQuery({
@@ -242,13 +244,22 @@ export default function EmailsPage({ round }: { round: any }) {
             <span className="text-sm text-gray-500">
               {recipientCount} unique recipient{recipientCount !== 1 ? "s" : ""}
             </span>
-            <button
-              onClick={() => setConfirmOpen(true)}
-              disabled={!canSend || sendResult.fetching}
-              className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
-            >
-              {sendResult.fetching ? "Sending..." : "Send Batch"}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPreviewOpen(true)}
+                disabled={!subject.trim() && !message.trim()}
+                className="border px-4 py-2 rounded text-sm disabled:opacity-50 hover:bg-gray-50"
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setConfirmOpen(true)}
+                disabled={!canSend || sendResult.fetching}
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
+              >
+                {sendResult.fetching ? "Sending..." : "Send Batch"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -285,6 +296,17 @@ export default function EmailsPage({ round }: { round: any }) {
           </div>
         </div>
       )}
+
+      {/* Preview Modal */}
+      <EmailPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        subject={subject}
+        summary={summary}
+        message={message}
+        recipientCount={recipientCount}
+        roundTitle={round?.title ?? ""}
+      />
 
       {/* Email History */}
       <div className="bg-white border rounded-lg p-4">

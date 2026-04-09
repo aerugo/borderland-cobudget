@@ -125,10 +125,52 @@ export const createDreamReviewComment = async (
     where: { userId_roundId: { userId: user.id, roundId } },
   });
   if (!member) throw new Error("Round member not found");
-  return prisma.dreamReviewComment.create({
+  const comment = await prisma.dreamReviewComment.create({
     data: { bucketId, authorId: member.id, content },
     include: { author: { include: { user: true } } },
   });
+
+  // Parse @-mentions and send email notifications
+  const mentionRegex = /@(\w+)/g;
+  const mentions: string[] = [];
+  let match;
+  while ((match = mentionRegex.exec(content)) !== null) {
+    mentions.push(match[1]);
+  }
+
+  if (mentions.length > 0) {
+    const mentionedMembers = await prisma.roundMember.findMany({
+      where: {
+        roundId,
+        user: { username: { in: mentions } },
+        NOT: { userId: user.id },
+      },
+      include: { user: true },
+    });
+
+    if (mentionedMembers.length > 0) {
+      const bucket = await prisma.bucket.findUnique({
+        where: { id: bucketId },
+        select: { title: true },
+      });
+      const authorName = comment.author?.user?.name || comment.author?.user?.username || "Someone";
+
+      await sendEmails(
+        mentionedMembers
+          .filter((m) => m.user?.email)
+          .map((m) => ({
+            to: m.user.email,
+            subject: `${authorName} mentioned you in a review note`,
+            html: `<p><strong>${authorName}</strong> mentioned you in a note for <em>${bucket?.title ?? "a dream"}</em>:</p><p>${content}</p>`,
+            text: `${authorName} mentioned you in a note for "${bucket?.title ?? "a dream"}":\n\n${content}`,
+          })),
+        true,
+        false
+      );
+    }
+  }
+
+  return comment;
 };
 
 export const editDreamReviewComment = async (
