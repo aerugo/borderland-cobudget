@@ -192,14 +192,44 @@ export default function RedistributionPage({
       </div>
 
       {/* Toggle */}
-      <label className="flex items-center gap-2 mb-3 text-sm cursor-pointer">
-        <input
-          type="checkbox"
-          checked={showFunded}
-          onChange={(e) => setShowFunded(e.target.checked)}
-        />
-        Show dreams that reached goal in granting
-      </label>
+      <div className="flex items-center gap-4 mb-3">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showFunded}
+            onChange={(e) => setShowFunded(e.target.checked)}
+          />
+          Show dreams that reached goal in granting
+        </label>
+        <button
+          onClick={() => {
+            const headers = ["Dream", "Goal", "Stretch", "Funded", "Missing", "Funders", "Progress",
+              "M:Combo", "M:Funders", "M:SEK", "M:Percent"];
+            const getAmt = (method: SortMethod, id: string) => {
+              const st = modelResults[method];
+              return st?.amounts[id] ?? "";
+            };
+            const rows = filtered.map((d) => [
+              `"${d.bucket.title.replace(/"/g, '""')}"`,
+              d.goal, d.stretch, d.funded, d.missing, d.funders,
+              d.goal > 0 ? Math.round((d.funded / d.goal) * 100) + "%" : "0%",
+              getAmt("combo", d.bucket.id), getAmt("funders", d.bucket.id),
+              getAmt("sek", d.bucket.id), getAmt("percent", d.bucket.id),
+            ]);
+            const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `freud-redistribution-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Export CSV
+        </button>
+      </div>
 
       {/* Redistribution Table */}
       <TableContainer className="overflow-x-auto">

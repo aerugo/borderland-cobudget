@@ -190,7 +190,7 @@ export function stepRedistribution(
   const newRemaining = state.sortedIds.filter(
     (id) => amounts[id] < goals[id] && amounts[id] > 0
   );
-  const isComplete = newRemaining.length <= 1 && pot === 0;
+  const isComplete = newRemaining.length <= 1;
 
   const summary = computeSummary(amounts, goals);
 

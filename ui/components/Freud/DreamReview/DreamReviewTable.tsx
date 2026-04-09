@@ -48,8 +48,20 @@ export default function DreamReviewTable({
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string>("");
   const [reviewFilter, setReviewFilter] = useState<string>("");
+  const [approvedFilter, setApprovedFilter] = useState<string>("");
+  const [publishedFilter, setPublishedFilter] = useState<string>("");
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [, approveBucket] = useMutation(APPROVE_BUCKET);
+
+  const hasActiveFilters = search || tagFilter || reviewFilter || approvedFilter || publishedFilter;
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setTagFilter("");
+    setReviewFilter("");
+    setApprovedFilter("");
+    setPublishedFilter("");
+  };
 
   const filtered = useMemo(() => {
     let result = bucketData;
@@ -67,8 +79,18 @@ export default function DreamReviewTable({
     if (reviewFilter === "unreviewed") {
       result = result.filter((d) => d.reviewedBy.length === 0);
     }
+    if (approvedFilter === "yes") {
+      result = result.filter((d) => !!d.bucket.approvedAt);
+    } else if (approvedFilter === "no") {
+      result = result.filter((d) => !d.bucket.approvedAt);
+    }
+    if (publishedFilter === "yes") {
+      result = result.filter((d) => !!d.bucket.publishedAt);
+    } else if (publishedFilter === "no") {
+      result = result.filter((d) => !d.bucket.publishedAt);
+    }
     return result;
-  }, [bucketData, search, tagFilter, reviewFilter]);
+  }, [bucketData, search, tagFilter, reviewFilter, approvedFilter, publishedFilter]);
 
   return (
     <>
@@ -108,6 +130,33 @@ export default function DreamReviewTable({
           <option value="">All dreams</option>
           <option value="unreviewed">Unreviewed only</option>
         </select>
+        <select
+          value={approvedFilter}
+          onChange={(e) => setApprovedFilter(e.target.value)}
+          className="border rounded px-2 py-1 text-sm"
+        >
+          <option value="">Approved: All</option>
+          <option value="yes">Approved</option>
+          <option value="no">Not approved</option>
+        </select>
+        <select
+          value={publishedFilter}
+          onChange={(e) => setPublishedFilter(e.target.value)}
+          className="border rounded px-2 py-1 text-sm"
+        >
+          <option value="">Published: All</option>
+          <option value="yes">Published</option>
+          <option value="no">Unpublished</option>
+        </select>
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="text-sm text-red-500 hover:text-red-700"
+            title="Clear all filters"
+          >
+            ✕ Clear
+          </button>
+        )}
         <button
           onClick={() => setTagManagerOpen(true)}
           className="text-sm text-gray-500 hover:text-gray-700 ml-auto"
