@@ -132,6 +132,7 @@ const schema = gql`
     freudData(roundId: ID!): [FreudBucketData!]!
     freudSnapshots(roundId: ID!): [FreudSnapshot!]!
     batchEmails(roundId: ID!): [BatchEmail!]!
+    bucketConversations(bucketId: ID!): [FreudConversation!]!
     conversations(roundId: ID!): [FreudConversation!]!
     conversation(id: ID!): FreudConversation
 

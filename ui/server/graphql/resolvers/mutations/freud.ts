@@ -331,6 +331,7 @@ export const createConversation = async (
   await assertAdminOrMod(roundId, user?.id, ss);
   const member = await prisma.roundMember.findUnique({
     where: { userId_roundId: { userId: user.id, roundId } },
+    include: { user: true },
   });
   if (!member) throw new Error("Round member not found");
 
@@ -345,12 +346,55 @@ export const createConversation = async (
       },
     },
     include: {
-      buckets: true,
+      buckets: { include: { cocreators: { include: { user: true } } } },
       createdBy: { include: { user: true } },
       messages: { include: { author: { include: { user: true } } } },
       _count: { select: { messages: true } },
     },
   });
+
+  // Notify co-creators of linked dreams + other admins/mods
+  const recipientEmails = new Set<string>();
+  for (const bucket of conversation.buckets) {
+    for (const cc of bucket.cocreators) {
+      if (cc.user?.email && cc.userId !== user.id) {
+        recipientEmails.add(cc.user.email);
+      }
+    }
+  }
+  const otherAdminMods = await prisma.roundMember.findMany({
+    where: {
+      roundId,
+      OR: [{ isAdmin: true }, { isModerator: true }],
+      NOT: { userId: user.id },
+    },
+    include: { user: true },
+  });
+  for (const am of otherAdminMods) {
+    if (am.user?.email) recipientEmails.add(am.user.email);
+  }
+
+  if (recipientEmails.size > 0) {
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: { group: true },
+    });
+    const groupSlug = round?.group?.slug ?? "c";
+    const roundSlug = round?.slug ?? "";
+    const convUrl = `${process.env.DEPLOY_URL ? `https://${process.env.DEPLOY_URL}` : "http://localhost:3000"}/${groupSlug}/${roundSlug}/freud/conversations/${conversation.id}`;
+    const authorName = member.user?.name || member.user?.username || "A Dream Team member";
+
+    await sendEmails(
+      Array.from(recipientEmails).map((email) => ({
+        to: email,
+        subject: `Dream Team: ${title}`,
+        html: `<p><strong>${authorName}</strong> started a conversation:</p><p>${initialMessage}</p><p><a href="${convUrl}">View and reply</a></p>`,
+        text: `${authorName} started a conversation: ${title}\n\n${initialMessage}\n\nView and reply: ${convUrl}`,
+      })),
+      true,
+      false
+    );
+  }
 
   return conversation;
 };
@@ -392,6 +436,55 @@ export const addConversationMessage = async (
     where: { id: conversationId },
     data: { updatedAt: new Date() },
   });
+
+  // Notify all participants except the author
+  const fullConv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      buckets: { include: { cocreators: { include: { user: true } } } },
+      round: { include: { group: true } },
+    },
+  });
+
+  if (fullConv) {
+    const recipientEmails = new Set<string>();
+    for (const bucket of fullConv.buckets) {
+      for (const cc of bucket.cocreators) {
+        if (cc.user?.email && cc.userId !== user.id) {
+          recipientEmails.add(cc.user.email);
+        }
+      }
+    }
+    const otherAdminMods = await prisma.roundMember.findMany({
+      where: {
+        roundId: fullConv.roundId,
+        OR: [{ isAdmin: true }, { isModerator: true }],
+        NOT: { userId: user.id },
+      },
+      include: { user: true },
+    });
+    for (const am of otherAdminMods) {
+      if (am.user?.email) recipientEmails.add(am.user.email);
+    }
+
+    if (recipientEmails.size > 0) {
+      const groupSlug = fullConv.round?.group?.slug ?? "c";
+      const roundSlug = fullConv.round?.slug ?? "";
+      const convUrl = `${process.env.DEPLOY_URL ? `https://${process.env.DEPLOY_URL}` : "http://localhost:3000"}/${groupSlug}/${roundSlug}/freud/conversations/${conversationId}`;
+      const authorName = message.author?.user?.name || message.author?.user?.username || "Someone";
+
+      await sendEmails(
+        Array.from(recipientEmails).map((email) => ({
+          to: email,
+          subject: `Re: ${fullConv.title}`,
+          html: `<p><strong>${authorName}</strong> replied:</p><p>${content}</p><p><a href="${convUrl}">View conversation</a></p>`,
+          text: `${authorName} replied:\n\n${content}\n\nView conversation: ${convUrl}`,
+        })),
+        true,
+        false
+      );
+    }
+  }
 
   return message;
 };

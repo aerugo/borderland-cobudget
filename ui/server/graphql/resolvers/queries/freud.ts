@@ -163,6 +163,43 @@ export const freudSnapshots = async (
   });
 };
 
+export const bucketConversations = async (
+  _parent,
+  { bucketId },
+  { user, ss }
+) => {
+  if (!user && !ss) throw new Error("You need to be logged in");
+
+  const bucket = await prisma.bucket.findUnique({
+    where: { id: bucketId },
+    include: { cocreators: true },
+  });
+  if (!bucket) return [];
+
+  // Check if user is admin/mod or cocreator
+  if (!ss) {
+    const member = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId: bucket.roundId } },
+    });
+    const isAdminMod = member?.isAdmin || member?.isModerator;
+    const isCocreator = bucket.cocreators.some((cc) => cc.userId === user.id);
+    if (!isAdminMod && !isCocreator) return [];
+  }
+
+  return prisma.conversation.findMany({
+    where: {
+      buckets: { some: { id: bucketId } },
+    },
+    include: {
+      buckets: true,
+      createdBy: { include: { user: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, include: { author: { include: { user: true } } } },
+      _count: { select: { messages: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+};
+
 export const batchEmails = async (
   _parent,
   { roundId },
