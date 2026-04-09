@@ -14,8 +14,6 @@ const DREAM_REVIEW_QUERY = gql`
         title
         approved
         published
-        approvedAt
-        publishedAt
         createdAt
         cocreators {
           id

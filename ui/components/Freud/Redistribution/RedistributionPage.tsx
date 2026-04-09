@@ -25,7 +25,7 @@ const FREUD_DATA_QUERY = gql`
         id
         title
         approved
-        publishedAt
+        published
       }
       goal
       stretch

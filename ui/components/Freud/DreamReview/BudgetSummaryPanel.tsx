@@ -26,7 +26,7 @@ export default function BudgetSummaryPanel({
 
   const stats = useMemo(() => {
     const publishedBuckets = bucketData.filter(
-      (d) => d.bucket.publishedAt
+      (d) => d.bucket.published
     );
     const allMinGoal = bucketData.reduce((sum, d) => sum + d.goal, 0);
     const publishedMinGoal = publishedBuckets.reduce(

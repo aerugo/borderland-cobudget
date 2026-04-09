@@ -80,14 +80,14 @@ export default function DreamReviewTable({
       result = result.filter((d) => d.reviewedBy.length === 0);
     }
     if (approvedFilter === "yes") {
-      result = result.filter((d) => !!d.bucket.approvedAt);
+      result = result.filter((d) => !!d.bucket.approved);
     } else if (approvedFilter === "no") {
-      result = result.filter((d) => !d.bucket.approvedAt);
+      result = result.filter((d) => !d.bucket.approved);
     }
     if (publishedFilter === "yes") {
-      result = result.filter((d) => !!d.bucket.publishedAt);
+      result = result.filter((d) => !!d.bucket.published);
     } else if (publishedFilter === "no") {
-      result = result.filter((d) => !d.bucket.publishedAt);
+      result = result.filter((d) => !d.bucket.published);
     }
     return result;
   }, [bucketData, search, tagFilter, reviewFilter, approvedFilter, publishedFilter]);
@@ -212,7 +212,7 @@ export default function DreamReviewTable({
           <TableBody>
             {filtered.map((d, idx) => {
               const progressPct = d.goal > 0 ? (d.funded / d.goal) * 100 : 0;
-              const isApproved = !!d.bucket.approvedAt;
+              const isApproved = !!d.bucket.approved;
 
               return (
                 <TableRow
