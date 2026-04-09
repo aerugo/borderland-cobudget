@@ -11,6 +11,7 @@ import { gql, useMutation } from "urql";
 import { FormattedNumber } from "react-intl";
 import DreamReviewTagCell from "./DreamReviewTagCell";
 import ReviewerCell from "./ReviewerCell";
+import ReviewNotesPopover from "./ReviewNotesPopover";
 import DreamReviewTagManager from "./DreamReviewTagManager";
 import Link from "next/link";
 
@@ -258,11 +259,12 @@ export default function DreamReviewTable({
                     />
                   </TableCell>
                   <TableCell className="!text-center">
-                    {d.reviewCommentCount > 0 && (
-                      <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                        {d.reviewCommentCount}
-                      </span>
-                    )}
+                    <ReviewNotesPopover
+                      bucketId={d.bucket.id}
+                      bucketTitle={d.bucket.title}
+                      commentCount={d.reviewCommentCount}
+                      currentMemberId={currentMemberId}
+                    />
                   </TableCell>
                 </TableRow>
               );

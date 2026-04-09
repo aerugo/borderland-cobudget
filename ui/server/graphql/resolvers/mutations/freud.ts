@@ -110,12 +110,58 @@ export const removeDreamReviewer = async (
 };
 
 // ═══════════════════════════════════════════
-// Dream Review Comments (Phase 3 stubs)
+// Dream Review Comments
 // ═══════════════════════════════════════════
 
-export const createDreamReviewComment = notImplemented;
-export const editDreamReviewComment = notImplemented;
-export const deleteDreamReviewComment = notImplemented;
+export const createDreamReviewComment = async (
+  _parent,
+  { bucketId, content },
+  { user, ss }
+) => {
+  const roundId = await getRoundIdFromBucket(bucketId);
+  await assertAdminOrMod(roundId, user?.id, ss);
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+  return prisma.dreamReviewComment.create({
+    data: { bucketId, authorId: member.id, content },
+    include: { author: { include: { user: true } } },
+  });
+};
+
+export const editDreamReviewComment = async (
+  _parent,
+  { id, content },
+  { user, ss }
+) => {
+  const comment = await prisma.dreamReviewComment.findUnique({
+    where: { id },
+    include: { bucket: true, author: true },
+  });
+  if (!comment) throw new Error("Comment not found");
+  await assertAdminOrMod(comment.bucket.roundId, user?.id, ss);
+  return prisma.dreamReviewComment.update({
+    where: { id },
+    data: { content },
+    include: { author: { include: { user: true } } },
+  });
+};
+
+export const deleteDreamReviewComment = async (
+  _parent,
+  { id },
+  { user, ss }
+) => {
+  const comment = await prisma.dreamReviewComment.findUnique({
+    where: { id },
+    include: { bucket: true },
+  });
+  if (!comment) throw new Error("Comment not found");
+  await assertAdminOrMod(comment.bucket.roundId, user?.id, ss);
+  await prisma.dreamReviewComment.delete({ where: { id } });
+  return true;
+};
 
 // ═══════════════════════════════════════════
 // FREUD Hearts (Phase 4 stub)
