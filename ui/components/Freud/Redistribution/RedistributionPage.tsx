@@ -141,6 +141,20 @@ export default function RedistributionPage({
     return <div className="text-center text-gray-400 py-12">Loading...</div>;
   }
 
+  if (result.error) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-red-500 mb-2">Failed to load redistribution data</div>
+        <button
+          onClick={() => result.fetching}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Budget Summary */}

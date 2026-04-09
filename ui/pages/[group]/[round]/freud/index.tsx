@@ -101,12 +101,18 @@ const FreudReviewPage = ({ round, currentUser, currentGroup }) => {
   );
 
   const loading = reviewResult.fetching || membersResult.fetching;
+  const error = reviewResult.error || membersResult.error;
 
   return (
     <div className="flex-1">
       <SubMenu currentUser={currentUser} round={round} />
       <FreudLayout currentUser={currentUser} round={round}>
-        {loading ? (
+        {error ? (
+          <div className="text-center py-12">
+            <div className="text-red-500 mb-2">Failed to load dream review data</div>
+            <div className="text-xs text-gray-400">{error.message}</div>
+          </div>
+        ) : loading ? (
           <div className="text-center text-gray-400 py-12">Loading...</div>
         ) : (
           <>

@@ -362,4 +362,4 @@ The Cobudget platform already has the foundational data model (Rounds, Buckets, 
 | Phase 4 | Complete | 2026-04-09 | 2026-04-09 | Algorithm + UI done. Fund overrides & CSV export deferred to P7. |
 | Phase 5 | Complete | 2026-04-09 | 2026-04-10 | Batch emails done. Postmark dispatch TODO. |
 | Phase 6 | Complete | 2026-04-10 | 2026-04-10 | Conversations done. Email notifs & bucket indicator deferred to P7. |
-| Phase 7 | Pending | | | Polish & Testing |
+| Phase 7 | In Progress | 2026-04-10 | | All deferrals resolved. Remaining: Remirror, loading skeletons, a11y, E2E, visual polish. |
