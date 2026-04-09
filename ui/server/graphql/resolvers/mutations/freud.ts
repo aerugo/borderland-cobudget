@@ -1,4 +1,5 @@
 import prisma from "../../../prisma";
+import { sendEmails } from "../../../send-email";
 
 const notImplemented = () => {
   throw new Error("FREUD: Not implemented yet");
@@ -295,7 +296,25 @@ export const sendBatchEmail = async (
     include: { sentBy: { include: { user: true } } },
   });
 
-  // TODO: Send emails via Postmark (wired up separately)
+  // Send emails via Postmark
+  if (recipientsList.length > 0) {
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      select: { title: true },
+    });
+    const footer = `<p style="color: #888; font-size: 12px; margin-top: 24px; border-top: 1px solid #eee; padding-top: 12px;">This email was sent by the Dream Team of ${round?.title ?? "your round"}.</p>`;
+
+    await sendEmails(
+      recipientsList.map((r) => ({
+        to: r.email,
+        subject,
+        html: `${message}${footer}`,
+        text: message.replace(/<[^>]*>/g, ""),
+      })),
+      true,
+      true // broadcast stream
+    );
+  }
 
   return batchEmail;
 };
@@ -333,11 +352,7 @@ export const createConversation = async (
     },
   });
 
-  return {
-    ...conversation,
-    messageCount: conversation._count.messages,
-    lastMessageAt: conversation.messages[0]?.createdAt ?? null,
-  };
+  return conversation;
 };
 
 export const addConversationMessage = async (
@@ -403,12 +418,5 @@ export const addBucketsToConversation = async (
     },
   });
 
-  return {
-    ...updated,
-    messageCount: updated._count.messages,
-    lastMessageAt:
-      updated.messages.length > 0
-        ? updated.messages[updated.messages.length - 1].createdAt
-        : null,
-  };
+  return updated;
 };

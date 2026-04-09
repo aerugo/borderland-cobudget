@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { FormattedNumber } from "react-intl";
 import ModelControlRow from "./ModelControlRow";
+import FundOverrideCell from "./FundOverrideCell";
 import {
   FreudDream,
   SortMethod,
@@ -90,20 +91,28 @@ export default function RedistributionPage({
     sek: null,
     percent: null,
   });
+  const [overrides, setOverrides] = useState<
+    Record<string, { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }>
+  >({});
 
   const bucketData = result.data?.freudData ?? [];
 
   const dreams: FreudDream[] = useMemo(
     () =>
-      bucketData.map((d) => ({
-        id: d.bucket.id,
-        title: d.bucket.title,
-        goal: d.goal,
-        stretch: d.stretch,
-        funded: d.funded,
-        funders: d.funders,
-      })),
-    [bucketData]
+      bucketData.map((d) => {
+        const ov = overrides[d.bucket.id];
+        return {
+          id: d.bucket.id,
+          title: d.bucket.title,
+          goal: d.goal,
+          stretch: d.stretch,
+          funded: d.funded,
+          funders: d.funders,
+          override: ov?.override,
+          manualAmount: ov?.manualAmount,
+        };
+      }),
+    [bucketData, overrides]
   );
 
   const goals: Record<string, number> = useMemo(() => {
@@ -243,6 +252,7 @@ export default function RedistributionPage({
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Missing</TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Funders</TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Progress</TableCell>
+              <TableCell className="!font-semibold !text-xs !text-gray-500">Fund</TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:Combo</TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:Funders</TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:SEK</TableCell>
@@ -302,6 +312,19 @@ export default function RedistributionPage({
                     <span className={progressPct >= 100 ? "text-green-600 font-medium" : ""}>
                       {Math.round(progressPct)}%
                     </span>
+                  </TableCell>
+                  <TableCell className="!py-1">
+                    <FundOverrideCell
+                      bucketId={d.bucket.id}
+                      override={overrides[d.bucket.id]?.override ?? "model"}
+                      manualAmount={overrides[d.bucket.id]?.manualAmount}
+                      onChangeOverride={(id, ov, amt) =>
+                        setOverrides((prev) => ({
+                          ...prev,
+                          [id]: { override: ov, manualAmount: amt },
+                        }))
+                      }
+                    />
                   </TableCell>
                   {(["combo", "funders", "sek", "percent"] as SortMethod[]).map((m) => (
                     <TableCell key={m} className={`!text-sm !text-right ${getModelCellColor(m)}`}>

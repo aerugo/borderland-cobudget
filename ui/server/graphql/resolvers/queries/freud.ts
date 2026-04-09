@@ -255,11 +255,5 @@ export const conversation = async (
     if (!isAdminMod && !isCocreator) return null;
   }
 
-  return {
-    ...conv,
-    messageCount: conv._count.messages,
-    lastMessageAt: conv.messages.length > 0
-      ? conv.messages[conv.messages.length - 1].createdAt
-      : null,
-  };
+  return conv;
 };

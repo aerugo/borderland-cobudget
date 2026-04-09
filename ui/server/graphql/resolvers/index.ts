@@ -34,6 +34,8 @@ import {
   User,
 } from "./types";
 
+import * as FreudConversation from "./types/FreudConversation";
+
 // mutations
 import {
   bucketMutations,
@@ -87,6 +89,7 @@ const resolvers = {
   Date,
   Expense,
   SuperAdminSession,
+  FreudConversation,
   JSON: GraphQLJSON,
   JSONObject: GraphQLJSONObject,
   BigInt,
