@@ -163,8 +163,17 @@ export const freudSnapshots = async (
   });
 };
 
-export const batchEmails = async (_parent, _args, _ctx) => {
-  return [];
+export const batchEmails = async (
+  _parent,
+  { roundId },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  return prisma.batchEmail.findMany({
+    where: { roundId },
+    include: { sentBy: { include: { user: true } } },
+    orderBy: { sentAt: "desc" },
+  });
 };
 
 export const conversations = async (_parent, _args, _ctx) => {

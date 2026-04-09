@@ -230,10 +230,75 @@ export const setFreudTotalBudget = async (
 };
 
 // ═══════════════════════════════════════════
-// Batch Emails (Phase 5 stub)
+// Batch Emails
 // ═══════════════════════════════════════════
 
-export const sendBatchEmail = notImplemented;
+export const sendBatchEmail = async (
+  _parent,
+  { roundId, subject, summary, message, bucketIds },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+
+  // Rate limit: 1 batch per 5 min per round
+  const recent = await prisma.batchEmail.findFirst({
+    where: { roundId },
+    orderBy: { sentAt: "desc" },
+  });
+  if (recent) {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (recent.sentAt > fiveMinAgo) {
+      throw new Error("Please wait 5 minutes between batch emails");
+    }
+  }
+
+  // Resolve recipients from selected buckets
+  const buckets = await prisma.bucket.findMany({
+    where: { id: { in: bucketIds } },
+    include: { cocreators: { include: { user: true } } },
+  });
+
+  const recipientMap = new Map<
+    string,
+    { email: string; name: string; bucketTitle: string }
+  >();
+  for (const bucket of buckets) {
+    for (const cc of bucket.cocreators) {
+      const email = cc.user?.email;
+      if (email && !recipientMap.has(email)) {
+        recipientMap.set(email, {
+          email,
+          name: cc.user?.name || cc.user?.username || "",
+          bucketTitle: bucket.title,
+        });
+      }
+    }
+  }
+
+  const recipientsList = Array.from(recipientMap.values());
+
+  const batchEmail = await prisma.batchEmail.create({
+    data: {
+      roundId,
+      subject,
+      summary,
+      message,
+      sentById: member.id,
+      recipientCount: recipientsList.length,
+      recipients: recipientsList,
+      bucketIds,
+    },
+    include: { sentBy: { include: { user: true } } },
+  });
+
+  // TODO: Send emails via Postmark (wired up separately)
+
+  return batchEmail;
+};
 
 // ═══════════════════════════════════════════
 // Conversations (Phase 6 stubs)

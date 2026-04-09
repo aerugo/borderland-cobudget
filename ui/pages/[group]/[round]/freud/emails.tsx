@@ -1,5 +1,6 @@
 import SubMenu from "../../../../components/SubMenu";
 import FreudLayout from "../../../../components/Freud/FreudLayout";
+import EmailsPage from "../../../../components/Freud/Emails/EmailsPage";
 
 const FreudEmailsPage = ({ round, currentUser, currentGroup }) => {
   const isAdminOrMod =
@@ -13,9 +14,7 @@ const FreudEmailsPage = ({ round, currentUser, currentGroup }) => {
     <div className="flex-1">
       <SubMenu currentUser={currentUser} round={round} />
       <FreudLayout currentUser={currentUser} round={round}>
-        <div className="text-gray-500 text-center py-12">
-          Batch Email Tool — coming in Phase 5
-        </div>
+        <EmailsPage round={round} />
       </FreudLayout>
     </div>
   );
