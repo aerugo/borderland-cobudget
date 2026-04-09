@@ -357,9 +357,9 @@ The Cobudget platform already has the foundational data model (Rounds, Buckets, 
 | Phase | Status | Started | Completed | Notes |
 |-------|--------|---------|-----------|-------|
 | Phase 1 | Complete | 2026-04-09 | 2026-04-09 | Migration pending (no DB). Type resolvers deferred to P6. |
-| Phase 2 | Pending | | | Dream Review Table |
-| Phase 3 | Pending | | | Dream Review Comments |
-| Phase 4 | Pending | | | Redistribution Engine |
-| Phase 5 | Pending | | | Batch Email Tool |
-| Phase 6 | Pending | | | Dream Conversations |
+| Phase 2 | Complete | 2026-04-09 | 2026-04-09 | Dream Review Table done. Notes popover deferred to P3. |
+| Phase 3 | Complete | 2026-04-09 | 2026-04-09 | Comments popover done. @-mention autocomplete deferred to P7. |
+| Phase 4 | Complete | 2026-04-09 | 2026-04-09 | Algorithm + UI done. Fund overrides & CSV export deferred to P7. |
+| Phase 5 | Complete | 2026-04-09 | 2026-04-10 | Batch emails done. Postmark dispatch TODO. |
+| Phase 6 | Complete | 2026-04-10 | 2026-04-10 | Conversations done. Email notifs & bucket indicator deferred to P7. |
 | Phase 7 | Pending | | | Polish & Testing |
