@@ -1,5 +1,6 @@
 import SubMenu from "../../../../components/SubMenu";
 import FreudLayout from "../../../../components/Freud/FreudLayout";
+import RedistributionPage from "../../../../components/Freud/Redistribution/RedistributionPage";
 
 const FreudRedistributionPage = ({ round, currentUser, currentGroup }) => {
   const isAdminOrMod =
@@ -13,9 +14,7 @@ const FreudRedistributionPage = ({ round, currentUser, currentGroup }) => {
     <div className="flex-1">
       <SubMenu currentUser={currentUser} round={round} />
       <FreudLayout currentUser={currentUser} round={round}>
-        <div className="text-gray-500 text-center py-12">
-          Redistribution Engine — coming in Phase 4
-        </div>
+        <RedistributionPage round={round} currentUser={currentUser} />
       </FreudLayout>
     </div>
   );

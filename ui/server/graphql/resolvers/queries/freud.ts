@@ -96,12 +96,71 @@ export const dreamReviewComments = async (
   });
 };
 
-export const freudData = async (_parent, _args, _ctx) => {
-  return [];
+export const freudData = async (
+  _parent,
+  { roundId },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+
+  const buckets = await prisma.bucket.findMany({
+    where: { roundId, deleted: { not: true } },
+    include: {
+      dreamReviewTags: true,
+      dreamReviews: { include: { reviewer: { include: { user: true } } } },
+      freudHearts: { include: { member: { include: { user: true } } } },
+      tags: true,
+      BudgetItems: true,
+      Contributions: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return buckets.map((bucket) => {
+    const minGoal = bucket.BudgetItems.reduce(
+      (acc, item) => acc + (item.type === "EXPENSE" ? item.min : 0),
+      0
+    );
+    const maxGoal = bucket.BudgetItems.reduce(
+      (acc, item) =>
+        acc + (item.type === "EXPENSE" ? (item.max ?? item.min) : 0),
+      0
+    );
+    const funded = bucket.Contributions.reduce(
+      (acc, c) => acc + c.amount,
+      0
+    );
+    const funderIds = new Set(
+      bucket.Contributions.map((c) => c.roundMemberId)
+    );
+
+    return {
+      bucket,
+      goal: minGoal,
+      stretch: maxGoal,
+      funded,
+      missing: minGoal - funded,
+      funders: funderIds.size,
+      progress: minGoal > 0 ? funded / minGoal : 0,
+      dreamReviewTags: bucket.dreamReviewTags,
+      hearts: bucket.freudHearts,
+      reviewedBy: bucket.dreamReviews.map((r) => r.reviewer),
+      reviewCommentCount: 0,
+    };
+  });
 };
 
-export const freudSnapshots = async (_parent, _args, _ctx) => {
-  return [];
+export const freudSnapshots = async (
+  _parent,
+  { roundId },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  return prisma.freudSnapshot.findMany({
+    where: { roundId },
+    include: { createdBy: { include: { user: true } } },
+    orderBy: { createdAt: "desc" },
+  });
 };
 
 export const batchEmails = async (_parent, _args, _ctx) => {

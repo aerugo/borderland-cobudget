@@ -164,16 +164,54 @@ export const deleteDreamReviewComment = async (
 };
 
 // ═══════════════════════════════════════════
-// FREUD Hearts (Phase 4 stub)
+// FREUD Hearts
 // ═══════════════════════════════════════════
 
-export const toggleFreudHeart = notImplemented;
+export const toggleFreudHeart = async (
+  _parent,
+  { bucketId },
+  { user, ss }
+) => {
+  const roundId = await getRoundIdFromBucket(bucketId);
+  await assertAdminOrMod(roundId, user?.id, ss);
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+
+  const existing = await prisma.freudHeart.findUnique({
+    where: { bucketId_memberId: { bucketId, memberId: member.id } },
+  });
+  if (existing) {
+    await prisma.freudHeart.delete({ where: { id: existing.id } });
+    return false;
+  } else {
+    await prisma.freudHeart.create({
+      data: { bucketId, memberId: member.id },
+    });
+    return true;
+  }
+};
 
 // ═══════════════════════════════════════════
-// FREUD Snapshots (Phase 4 stub)
+// FREUD Snapshots
 // ═══════════════════════════════════════════
 
-export const saveFreudSnapshot = notImplemented;
+export const saveFreudSnapshot = async (
+  _parent,
+  { roundId, algorithm, data },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+  return prisma.freudSnapshot.create({
+    data: { roundId, algorithm, data, createdById: member.id },
+    include: { createdBy: { include: { user: true } } },
+  });
+};
 
 // ═══════════════════════════════════════════
 // FREUD Total Budget
