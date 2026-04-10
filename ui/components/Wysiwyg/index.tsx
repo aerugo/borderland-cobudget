@@ -102,21 +102,21 @@ const EditorCss = styled.div`
   }
 
   /* correct color on outline and toolbar buttons */
-  ${({ highlightColor }) =>
-    highlightColor
+  ${({ $highlightColor }) =>
+    $highlightColor
       ? `--rmr-color-outline: ${namedColorWithAlpha(
-          highlightColor,
+          $highlightColor,
           "100%"
         )} !important;
-        --rmr-color-primary: ${namedColorToHsl(highlightColor)} !important;
+        --rmr-color-primary: ${namedColorToHsl($highlightColor)} !important;
         --rmr-color-hover-primary: ${namedColorToHsl(
-          highlightColor
+          $highlightColor
         )} !important;`
       : ""}
 
   /* editor height */
   .ProseMirror {
-    min-height: ${({ rows }) => `${rows * 2.5}em !important`};
+    min-height: ${({ $rows }) => `${$rows * 2.5}em !important`};
   }
 
   /* to avoid the mention popup ending up under other elements
@@ -602,7 +602,7 @@ const Wysiwyg = ({
   return (
     <AllStyledComponent>
       <ThemeProvider>
-        <EditorCss highlightColor={highlightColor} rows={rows}>
+        <EditorCss $highlightColor={highlightColor} $rows={rows}>
           <input
             className="filepicker"
             type="file"
