@@ -40,3 +40,6 @@ cypress/fixtures/
 .aider*
 .env
 .envrc
+av-staging-admin-key.json
+.postmark-mcp/
+.mcp.json
