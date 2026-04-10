@@ -48,8 +48,11 @@ export default function NewRoundPage({ currentGroup }) {
   const intl = useIntl();
   const onSubmit = (variables) => {
     createRound({ ...variables, groupId: currentGroup.id })
-      .then(({ data }) => {
-        console.log({ data });
+      .then(({ data, error }) => {
+        if (error) {
+          alert(error.message);
+          return;
+        }
         Router.push(
           "/[group]/[round]",
           `/${router.query.group}/${data.createRound.slug}`
