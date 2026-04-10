@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import Link from "next/link";
 import dayjs from "dayjs";
@@ -15,6 +15,7 @@ const CONVERSATIONS_QUERY = gql`
       title
       messageCount
       createdAt
+      lastMessageAt
       buckets {
         id
         title
@@ -70,6 +71,9 @@ const CREATE_CONVERSATION = gql`
     ) {
       id
       title
+      buckets {
+        id
+      }
     }
   }
 `;
@@ -87,6 +91,30 @@ export default function ConversationList({
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [selectedBucketIds, setSelectedBucketIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [bucketFilterIds, setBucketFilterIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [dreamFilterOpen, setDreamFilterOpen] = useState(false);
+  const [dreamFilterQuery, setDreamFilterQuery] = useState("");
+  const dreamFilterRef = useRef<HTMLDivElement>(null);
+  const [sortBy, setSortBy] = useState<
+    "recent" | "oldest" | "titleAsc" | "titleDesc" | "dreamAsc" | "dreamDesc"
+  >("recent");
+
+  useEffect(() => {
+    if (!dreamFilterOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (
+        dreamFilterRef.current &&
+        !dreamFilterRef.current.contains(e.target as Node)
+      ) {
+        setDreamFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [dreamFilterOpen]);
 
   const [convResult] = useQuery({
     query: CONVERSATIONS_QUERY,
@@ -100,6 +128,85 @@ export default function ConversationList({
 
   const conversations = convResult.data?.conversations ?? [];
   const allBuckets = bucketsResult.data?.dreamReviewTable ?? [];
+
+  const bucketById = useMemo(() => {
+    const map = new Map<string, { id: string; title: string }>();
+    for (const d of allBuckets) map.set(d.bucket.id, d.bucket);
+    return map;
+  }, [allBuckets]);
+
+  const dreamFilterMatches = useMemo(() => {
+    const q = dreamFilterQuery.trim().toLowerCase();
+    const list = q
+      ? allBuckets.filter((d) =>
+          d.bucket.title?.toLowerCase().includes(q)
+        )
+      : allBuckets;
+    return list.slice(0, 50);
+  }, [allBuckets, dreamFilterQuery]);
+
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = conversations.filter((conv) => {
+      if (
+        bucketFilterIds.size > 0 &&
+        !conv.buckets.some((b) => bucketFilterIds.has(b.id))
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      if (conv.title?.toLowerCase().includes(q)) return true;
+      if (conv.buckets.some((b) => b.title?.toLowerCase().includes(q))) {
+        return true;
+      }
+      if (
+        conv.messages?.some((m) => m.content?.toLowerCase().includes(q))
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    const dreamLabel = (conv) =>
+      (conv.buckets?.[0]?.title ?? "").toLowerCase();
+    const title = (conv) => (conv.title ?? "").toLowerCase();
+    const lastTs = (conv) => {
+      const v = conv.lastMessageAt ?? conv.createdAt;
+      return v ? new Date(v).getTime() : 0;
+    };
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case "recent":
+        sorted.sort((a, b) => lastTs(b) - lastTs(a));
+        break;
+      case "oldest":
+        sorted.sort((a, b) => lastTs(a) - lastTs(b));
+        break;
+      case "titleAsc":
+        sorted.sort((a, b) => title(a).localeCompare(title(b)));
+        break;
+      case "titleDesc":
+        sorted.sort((a, b) => title(b).localeCompare(title(a)));
+        break;
+      case "dreamAsc":
+        sorted.sort((a, b) => dreamLabel(a).localeCompare(dreamLabel(b)));
+        break;
+      case "dreamDesc":
+        sorted.sort((a, b) => dreamLabel(b).localeCompare(dreamLabel(a)));
+        break;
+    }
+    return sorted;
+  }, [conversations, search, bucketFilterIds, sortBy]);
+
+  const toggleBucketFilter = (id: string) => {
+    setBucketFilterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleCreate = async () => {
     if (!title.trim() || !message.trim() || selectedBucketIds.size === 0) return;
@@ -184,6 +291,141 @@ export default function ConversationList({
         </div>
       )}
 
+      {/* Search + filter */}
+      {!convResult.fetching && conversations.length > 0 && (
+        <div className="flex flex-col sm:flex-row gap-2 mb-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search conversations..."
+            className="border rounded px-3 py-2 text-sm flex-1 min-w-0"
+          />
+          <div
+            ref={dreamFilterRef}
+            className="relative flex-1 min-w-0 sm:max-w-[320px]"
+          >
+            <div
+              className="flex flex-wrap items-center gap-1 border rounded px-2 py-1 min-h-[38px] bg-white cursor-text"
+              onClick={() => {
+                setDreamFilterOpen(true);
+              }}
+            >
+              {Array.from(bucketFilterIds).map((id) => {
+                const bucket = bucketById.get(id);
+                const label = bucket?.title ?? "Unknown";
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded"
+                  >
+                    <span className="truncate max-w-[140px]">{label}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBucketFilter(id);
+                      }}
+                      aria-label={`Remove ${label}`}
+                      className="text-blue-600 hover:text-blue-900 leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+              <input
+                type="text"
+                value={dreamFilterQuery}
+                onChange={(e) => {
+                  setDreamFilterQuery(e.target.value);
+                  setDreamFilterOpen(true);
+                }}
+                onFocus={() => setDreamFilterOpen(true)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Backspace" &&
+                    dreamFilterQuery === "" &&
+                    bucketFilterIds.size > 0
+                  ) {
+                    const last = Array.from(bucketFilterIds).pop()!;
+                    toggleBucketFilter(last);
+                  } else if (e.key === "Escape") {
+                    setDreamFilterOpen(false);
+                  }
+                }}
+                placeholder={
+                  bucketFilterIds.size === 0 ? "Filter by dream..." : ""
+                }
+                className="flex-1 min-w-[120px] text-sm outline-none bg-transparent"
+              />
+            </div>
+            {dreamFilterOpen && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-y-auto z-20">
+                {dreamFilterMatches.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-400">
+                    No matching dreams
+                  </div>
+                ) : (
+                  dreamFilterMatches.map((d) => {
+                    const selected = bucketFilterIds.has(d.bucket.id);
+                    return (
+                      <button
+                        type="button"
+                        key={d.bucket.id}
+                        onClick={() => {
+                          toggleBucketFilter(d.bucket.id);
+                          setDreamFilterQuery("");
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-blue-50 ${
+                          selected ? "bg-blue-50/60" : ""
+                        }`}
+                      >
+                        <span
+                          className={`inline-block w-4 text-blue-600 ${
+                            selected ? "" : "invisible"
+                          }`}
+                        >
+                          ✓
+                        </span>
+                        <span className="truncate">{d.bucket.title}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="border rounded px-3 py-2 text-sm bg-white sm:max-w-[200px]"
+            aria-label="Sort conversations"
+          >
+            <option value="recent">Sort: Latest activity</option>
+            <option value="oldest">Sort: Oldest activity</option>
+            <option value="titleAsc">Sort: Subject A–Z</option>
+            <option value="titleDesc">Sort: Subject Z–A</option>
+            <option value="dreamAsc">Sort: Dream A–Z</option>
+            <option value="dreamDesc">Sort: Dream Z–A</option>
+          </select>
+          {(search || bucketFilterIds.size > 0 || sortBy !== "recent") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setBucketFilterIds(new Set());
+                setDreamFilterQuery("");
+                setSortBy("recent");
+              }}
+              className="text-sm text-gray-500 hover:text-gray-700 px-2"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Conversation List */}
       {convResult.fetching ? (
         <CardListSkeleton count={3} />
@@ -191,9 +433,18 @@ export default function ConversationList({
         <div className="text-center text-gray-400 py-8">
           No conversations yet. Start one to reach out to dreamers.
         </div>
+      ) : filteredConversations.length === 0 ? (
+        <div className="text-center text-gray-400 py-8">
+          No conversations match your search.
+        </div>
       ) : (
         <div className="space-y-2">
-          {conversations.map((conv) => {
+          {(search || bucketFilterIds.size > 0) && (
+            <div className="text-xs text-gray-400 mb-1">
+              Showing {filteredConversations.length} of {conversations.length}
+            </div>
+          )}
+          {filteredConversations.map((conv) => {
             const lastMsg = conv.messages?.[0];
             return (
               <Link
