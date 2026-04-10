@@ -23,7 +23,6 @@ const BUCKETS_QUERY = gql`
           id
           user {
             id
-            email
             username
             name
           }
@@ -112,15 +111,15 @@ export default function EmailsPage({ round }: { round: any }) {
   }, [bucketData, search]);
 
   const recipientCount = useMemo(() => {
-    const emails = new Set<string>();
+    const userIds = new Set<string>();
     for (const d of bucketData) {
       if (selectedBucketIds.has(d.bucket.id)) {
         for (const cc of d.bucket.cocreators) {
-          if (cc.user?.email) emails.add(cc.user.email);
+          if (cc.user?.id) userIds.add(cc.user.id);
         }
       }
     }
-    return emails.size;
+    return userIds.size;
   }, [bucketData, selectedBucketIds]);
 
   const handleToggleBucket = (id: string) => {
