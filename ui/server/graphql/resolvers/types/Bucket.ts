@@ -7,6 +7,10 @@ import {
   getRoundFundingStatuses,
 } from "../helpers";
 import { isBucketFavorite } from "../helpers/bucket";
+import {
+  getViewerScopedBucketConversations,
+  viewerCanAccessBucketConversations,
+} from "../helpers/conversationAccess";
 
 export const cocreators = async (bucket) => {
   return prisma.bucket.findUnique({ where: { id: bucket.id } }).cocreators();
@@ -308,6 +312,30 @@ export const isFavorite = async ({ id, roundId }, _: unknown, { user }) => {
     return false;
   }
 };
+
+export const privateConversations = async (bucket, _args, ctx) => {
+  return getViewerScopedBucketConversations(bucket.id, ctx);
+};
+
+export const noOfPrivateConversations = async (bucket, _args, ctx) => {
+  const list = await getViewerScopedBucketConversations(bucket.id, ctx);
+  return list.length;
+};
+
+export const canAccessPrivateConversations = async (bucket, _args, ctx) => {
+  if (!ctx?.user && !ctx?.ss) return false;
+  const withCocreators = await prisma.bucket.findUnique({
+    where: { id: bucket.id },
+    include: { cocreators: { select: { userId: true } } },
+  });
+  if (!withCocreators) return false;
+  return viewerCanAccessBucketConversations(withCocreators, ctx);
+};
+
+// Identical to canAccessPrivateConversations in this release — any
+// participant may start a topic. Kept as a separate SDL field for semantic
+// clarity and future-proofing (e.g. freeze-period restrictions).
+export const canStartPrivateConversation = canAccessPrivateConversations;
 
 export const awardedAmount = async (bucket) => {
   // Use pre-computed funding status if available (from bucketsPage optimization)

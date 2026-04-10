@@ -15,6 +15,50 @@ async function assertAdminOrMod(roundId: string, userId: string, ss: any) {
     throw new Error("You need to be admin or moderator of the round");
 }
 
+/**
+ * Authorization gate for starting a new conversation. Policy:
+ *   - Super admin sessions bypass.
+ *   - Otherwise the caller must be logged in.
+ *   - `bucketIds` must be non-empty and all referenced buckets must exist
+ *     and belong to `roundId`.
+ *   - Admins/mods of the round may link any buckets in the round.
+ *   - Cocreators may only link buckets they cocreate — ALL buckets in the
+ *     list must be ones the caller cocreates.
+ */
+async function assertCanCreateConversation(
+  roundId: string,
+  bucketIds: string[],
+  ctx: { user?: { id: string } | null; ss?: any }
+): Promise<void> {
+  if (ctx?.ss) return;
+  const userId = ctx?.user?.id;
+  if (!userId) throw new Error("You need to be logged in");
+
+  const uniqueBucketIds = Array.from(new Set(bucketIds));
+  if (uniqueBucketIds.length === 0)
+    throw new Error("At least one dream must be selected");
+
+  const buckets = await prisma.bucket.findMany({
+    where: { id: { in: uniqueBucketIds } },
+    include: { cocreators: { select: { userId: true } } },
+  });
+  if (buckets.length !== uniqueBucketIds.length)
+    throw new Error("One or more dreams not found");
+  if (buckets.some((b) => b.roundId !== roundId))
+    throw new Error("All dreams must belong to the same round");
+
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId, roundId } },
+  });
+  if (member?.isAdmin || member?.isModerator) return;
+
+  const cocreatesAll = buckets.every((b) =>
+    b.cocreators.some((cc) => cc.userId === userId)
+  );
+  if (!cocreatesAll)
+    throw new Error("You can only start a conversation on dreams you cocreate");
+}
+
 async function getRoundIdFromBucket(bucketId: string): Promise<string> {
   const bucket = await prisma.bucket.findUnique({
     where: { id: bucketId },
@@ -370,7 +414,7 @@ export const createConversation = async (
   { roundId, title, bucketIds, initialMessage },
   { user, ss }
 ) => {
-  await assertAdminOrMod(roundId, user?.id, ss);
+  await assertCanCreateConversation(roundId, bucketIds, { user, ss });
   const member = await prisma.roundMember.findUnique({
     where: { userId_roundId: { userId: user.id, roundId } },
     include: { user: true },

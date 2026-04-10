@@ -823,6 +823,11 @@ const schema = gql`
     expenses: [Expense]
     expense(id: String!): Expense
     isFavorite: Boolean
+    # FREUD Dream Team private channel — per-viewer scoped.
+    privateConversations: [FreudConversation!]!
+    noOfPrivateConversations: Int!
+    canAccessPrivateConversations: Boolean!
+    canStartPrivateConversation: Boolean!
   }
 
   enum DirectFundingType {

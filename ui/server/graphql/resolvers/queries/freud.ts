@@ -1,5 +1,6 @@
 import prisma from "../../../prisma";
 import { getRoundMember } from "../helpers";
+import { getViewerScopedBucketConversations } from "../helpers/conversationAccess";
 
 async function assertAdminOrMod(roundId: string, userId: string, ss: any) {
   if (ss) return; // super admin bypass
@@ -169,35 +170,7 @@ export const bucketConversations = async (
   { user, ss }
 ) => {
   if (!user && !ss) throw new Error("You need to be logged in");
-
-  const bucket = await prisma.bucket.findUnique({
-    where: { id: bucketId },
-    include: { cocreators: true },
-  });
-  if (!bucket) return [];
-
-  // Check if user is admin/mod or cocreator
-  if (!ss) {
-    const member = await prisma.roundMember.findUnique({
-      where: { userId_roundId: { userId: user.id, roundId: bucket.roundId } },
-    });
-    const isAdminMod = member?.isAdmin || member?.isModerator;
-    const isCocreator = bucket.cocreators.some((cc) => cc.userId === user.id);
-    if (!isAdminMod && !isCocreator) return [];
-  }
-
-  return prisma.conversation.findMany({
-    where: {
-      buckets: { some: { id: bucketId } },
-    },
-    include: {
-      buckets: true,
-      createdBy: { include: { user: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1, include: { author: { include: { user: true } } } },
-      _count: { select: { messages: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  return getViewerScopedBucketConversations(bucketId, { user, ss });
 };
 
 export const batchEmails = async (
