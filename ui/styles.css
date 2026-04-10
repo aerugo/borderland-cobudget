@@ -303,3 +303,14 @@ h5 {
 .draggable-sorting-helper {
   z-index: 1400;
 }
+
+/* Tippy theme for FREUD popovers that supply their own background/border. */
+.tippy-box[data-theme~="freud-popover"] {
+  background-color: transparent;
+  color: inherit;
+  box-shadow: none;
+  padding: 0;
+}
+.tippy-box[data-theme~="freud-popover"] > .tippy-content {
+  padding: 0;
+}

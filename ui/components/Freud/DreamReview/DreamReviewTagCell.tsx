@@ -73,7 +73,8 @@ export default function DreamReviewTagCell({
       onClickOutside={() => setOpen(false)}
       placement="bottom-start"
       appendTo={() => document.body}
-      render={(attrs) => <div {...attrs}>{content}</div>}
+      arrow={false}
+      theme="freud-popover"
     >
       <div
         className="flex flex-wrap gap-1 cursor-pointer min-h-[24px]"

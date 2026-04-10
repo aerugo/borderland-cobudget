@@ -141,9 +141,27 @@ export default function ReviewNotesPopover({
   };
 
   const popoverContent = (
-    <div className="bg-white border rounded-lg shadow-xl w-[350px] max-h-[400px] flex flex-col">
-      <div className="px-3 py-2 border-b">
-        <div className="text-xs text-gray-400 truncate">{bucketTitle}</div>
+    <div
+      className="bg-white border rounded-lg shadow-xl w-[350px] max-h-[400px] flex flex-col"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <div className="px-3 py-2 border-b flex items-center gap-2">
+        <div className="text-xs text-gray-400 truncate flex-1">
+          {bucketTitle}
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close notes"
+          className="text-gray-400 hover:text-gray-700 leading-none text-lg px-1"
+        >
+          ×
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {commentsResult.fetching && (
@@ -275,7 +293,8 @@ export default function ReviewNotesPopover({
       onClickOutside={() => setOpen(false)}
       placement="bottom-end"
       appendTo={() => document.body}
-      render={(attrs) => <div {...attrs}>{popoverContent}</div>}
+      arrow={false}
+      theme="freud-popover"
     >
       <button
         onClick={() => setOpen(!open)}

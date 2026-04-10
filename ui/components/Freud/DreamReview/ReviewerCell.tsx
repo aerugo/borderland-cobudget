@@ -50,7 +50,28 @@ export default function ReviewerCell({
   };
 
   const content = (
-    <div className="bg-white border rounded shadow-lg p-2 min-w-[200px]">
+    <div
+      className="bg-white border rounded shadow-lg p-2 min-w-[200px]"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <div className="flex items-center justify-between mb-1 px-1">
+        <div className="text-xs text-gray-400 uppercase tracking-wide">
+          Reviewers
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close"
+          className="text-gray-400 hover:text-gray-700 leading-none text-lg"
+        >
+          ×
+        </button>
+      </div>
       {!reviewerIds.has(currentMemberId) && (
         <button
           onClick={() => handleToggle(currentMemberId)}
@@ -87,7 +108,8 @@ export default function ReviewerCell({
       onClickOutside={() => setOpen(false)}
       placement="bottom-start"
       appendTo={() => document.body}
-      render={(attrs) => <div {...attrs}>{content}</div>}
+      arrow={false}
+      theme="freud-popover"
     >
       <div
         className="flex items-center gap-1 cursor-pointer min-h-[24px]"
