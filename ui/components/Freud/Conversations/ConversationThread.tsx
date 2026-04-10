@@ -2,6 +2,7 @@ import { useState } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import Link from "next/link";
 import dayjs from "dayjs";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import Avatar from "components/Avatar";
 
 const CONVERSATION_QUERY = gql`
@@ -71,12 +72,16 @@ const ADD_MESSAGE = gql`
 
 export default function ConversationThread({
   conversationId,
-  groupSlug,
-  roundSlug,
+  onBack,
+  backHref,
+  backLabel,
+  privateChannel = false,
 }: {
   conversationId: string;
-  groupSlug: string;
-  roundSlug: string;
+  onBack?: () => void;
+  backHref?: string;
+  backLabel?: string;
+  privateChannel?: boolean;
 }) {
   const [input, setInput] = useState("");
 
@@ -135,15 +140,40 @@ export default function ConversationThread({
   };
 
   return (
-    <div>
-      <Link
-        href={`/${groupSlug}/${roundSlug}/freud/conversations`}
-        className="text-sm text-blue-600 hover:underline mb-4 block"
-      >
-        ← Back to Conversations
-      </Link>
+    <div
+      className={
+        privateChannel ? "bg-blue-50/40 rounded-lg p-4 -m-4" : undefined
+      }
+    >
+      {(onBack || backHref) &&
+        (onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm text-blue-600 hover:underline mb-4 block"
+          >
+            ← {backLabel ?? "Back"}
+          </button>
+        ) : (
+          <Link
+            href={backHref!}
+            className="text-sm text-blue-600 hover:underline mb-4 block"
+          >
+            ← {backLabel ?? "Back to Conversations"}
+          </Link>
+        ))}
 
-      <h2 className="font-semibold text-xl mb-1">{conv.title}</h2>
+      <div className="flex items-center gap-2 mb-1">
+        {privateChannel && (
+          <LockOutlinedIcon fontSize="small" className="text-blue-700" />
+        )}
+        <h2 className="font-semibold text-xl">{conv.title}</h2>
+        {privateChannel && (
+          <span className="text-[10px] uppercase tracking-wide bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+            Private
+          </span>
+        )}
+      </div>
       <div className="text-sm text-gray-500 mb-1">
         Dreams: {conv.buckets.map((b) => b.title).join(" · ")}
       </div>

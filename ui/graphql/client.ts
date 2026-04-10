@@ -607,15 +607,66 @@ export const client = (
                 .filter((f) => f.fieldName === "batchEmails")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
             },
-            createConversation(_result, _args, cache) {
+            createConversation(result: any, _args, cache) {
+              // Invalidate the round-wide conversations list.
               cache.inspectFields("Query")
                 .filter((f) => f.fieldName === "conversations")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+
+              // Invalidate the legacy per-bucket query for every linked bucket.
+              const linkedBuckets: Array<{ id: string }> =
+                result?.createConversation?.buckets ?? [];
+              const linkedIds = new Set(linkedBuckets.map((b) => b.id));
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "bucketConversations")
+                .forEach((f) => {
+                  const bucketId = (f.arguments as any)?.bucketId;
+                  if (typeof bucketId === "string" && linkedIds.has(bucketId)) {
+                    cache.invalidate("Query", f.fieldName, f.arguments);
+                  }
+                });
+
+              // Invalidate the new per-bucket fields so the tab list and badge refresh.
+              for (const b of linkedBuckets) {
+                cache.invalidate(
+                  { __typename: "Bucket", id: b.id } as any,
+                  "privateConversations"
+                );
+                cache.invalidate(
+                  { __typename: "Bucket", id: b.id } as any,
+                  "noOfPrivateConversations"
+                );
+              }
             },
             addConversationMessage(_result, args, cache) {
               cache.inspectFields("Query")
                 .filter((f) => f.fieldName === "conversation")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+
+              // The message mutation result does not include the parent conversation's
+              // bucket list, so walk the cached FreudConversation entity to find them.
+              const convId = (args as any)?.conversationId;
+              if (typeof convId === "string") {
+                const bucketsRef = cache.resolve(
+                  { __typename: "FreudConversation", id: convId } as any,
+                  "buckets"
+                ) as any[] | null;
+                if (Array.isArray(bucketsRef)) {
+                  for (const ref of bucketsRef) {
+                    const bucketId = cache.resolve(ref, "id") as string | null;
+                    if (typeof bucketId === "string") {
+                      cache.invalidate(
+                        { __typename: "Bucket", id: bucketId } as any,
+                        "privateConversations"
+                      );
+                      cache.invalidate(
+                        { __typename: "Bucket", id: bucketId } as any,
+                        "noOfPrivateConversations"
+                      );
+                    }
+                  }
+                }
+              }
             },
 
             contribute(result, args, cache) {

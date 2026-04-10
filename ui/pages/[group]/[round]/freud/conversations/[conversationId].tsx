@@ -17,8 +17,8 @@ const FreudConversationPage = ({ round, currentUser, currentGroup }) => {
         {conversationId && (
           <ConversationThread
             conversationId={conversationId}
-            groupSlug={router.query.group as string}
-            roundSlug={router.query.round as string}
+            backHref={`/${router.query.group}/${router.query.round}/freud/conversations`}
+            backLabel="Back to Conversations"
           />
         )}
       </FreudLayout>
