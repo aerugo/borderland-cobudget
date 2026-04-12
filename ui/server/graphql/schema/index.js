@@ -1160,10 +1160,10 @@ const schema = gql`
 
   type FreudBucketData {
     bucket: Bucket!
-    goal: Int!
-    stretch: Int!
-    funded: Int!
-    missing: Int!
+    goal: Float!
+    stretch: Float!
+    funded: Float!
+    missing: Float!
     funders: Int!
     progress: Float!
     dreamReviewTags: [DreamReviewTag!]!
