@@ -53,10 +53,10 @@ export const dreamReviewTable = async (
 
     return {
       bucket,
-      goal: minGoal,
-      stretch: maxGoal,
-      funded,
-      missing: minGoal - funded,
+      goal: minGoal / 100,
+      stretch: maxGoal / 100,
+      funded: funded / 100,
+      missing: (minGoal - funded) / 100,
       funders: funderIds.size,
       progress: minGoal > 0 ? funded / minGoal : 0,
       dreamReviewTags: bucket.dreamReviewTags,
@@ -137,10 +137,10 @@ export const freudData = async (
 
     return {
       bucket,
-      goal: minGoal,
-      stretch: maxGoal,
-      funded,
-      missing: minGoal - funded,
+      goal: minGoal / 100,
+      stretch: maxGoal / 100,
+      funded: funded / 100,
+      missing: (minGoal - funded) / 100,
       funders: funderIds.size,
       progress: minGoal > 0 ? funded / minGoal : 0,
       dreamReviewTags: bucket.dreamReviewTags,
