@@ -478,7 +478,7 @@ export const createConversation = async (
         text: `${authorName} started a conversation: ${title}\n\n${initialMessage}\n\nView and reply: ${convUrl}`,
       })),
       true,
-      false
+      true
     );
   }
 
@@ -567,7 +567,7 @@ export const addConversationMessage = async (
           text: `${authorName} replied:\n\n${content}\n\nView conversation: ${convUrl}`,
         })),
         true,
-        false
+        true
       );
     }
   }
