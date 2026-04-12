@@ -1,5 +1,22 @@
 import prisma from "../../../prisma";
 import { sendEmails } from "../../../send-email";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import remarkRehype from "remark-rehype";
+import rehypeSanitize from "rehype-sanitize";
+import rehypeStringify from "rehype-stringify";
+
+const mdToHtmlConverter = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkRehype)
+  .use(rehypeSanitize)
+  .use(rehypeStringify);
+
+async function mdToHtml(md: string) {
+  return String(await mdToHtmlConverter.process(md));
+}
 
 const notImplemented = () => {
   throw new Error("FREUD: Not implemented yet");
@@ -199,13 +216,15 @@ export const createDreamReviewComment = async (
       });
       const authorName = comment.author?.user?.name || comment.author?.user?.username || "Someone";
 
+      const mentionContentHtml = await mdToHtml(content);
       await sendEmails(
         mentionedMembers
           .filter((m) => m.user?.email)
           .map((m) => ({
             to: m.user.email,
             subject: `${authorName} mentioned you in a review note`,
-            html: `<p><strong>${authorName}</strong> mentioned you in a note for <em>${bucket?.title ?? "a dream"}</em>:</p><p>${content}</p>`,
+            html: `<p style="margin: 0 0 16px 0; color: #555;"><strong>${authorName}</strong> mentioned you in a note for <em>${bucket?.title ?? "a dream"}</em>:</p>
+            <div style="background-color: #f9fafb; border-left: 3px solid #6366f1; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">${mentionContentHtml}</div>`,
             text: `${authorName} mentioned you in a note for "${bucket?.title ?? "a dream"}":\n\n${content}`,
           })),
         true,
@@ -389,13 +408,14 @@ export const sendBatchEmail = async (
       select: { title: true },
     });
     const footer = `<p style="color: #888; font-size: 12px; margin-top: 24px; border-top: 1px solid #eee; padding-top: 12px;">This email was sent by the Dream Team of ${round?.title ?? "your round"}.</p>`;
+    const messageHtml = await mdToHtml(message);
 
     await sendEmails(
       recipientsList.map((r) => ({
         to: r.email,
         subject,
-        html: `${message}${footer}`,
-        text: message.replace(/<[^>]*>/g, ""),
+        html: `${messageHtml}${footer}`,
+        text: message,
       })),
       true,
       true // broadcast stream
@@ -470,11 +490,15 @@ export const createConversation = async (
     const convUrl = `${process.env.DEPLOY_URL ? `https://${process.env.DEPLOY_URL}` : "http://localhost:3000"}/${groupSlug}/${roundSlug}/freud/conversations/${conversation.id}`;
     const authorName = member.user?.name || member.user?.username || "A Dream Team member";
 
+    const initialMessageHtml = await mdToHtml(initialMessage);
     await sendEmails(
       Array.from(recipientEmails).map((email) => ({
         to: email,
         subject: `Dream Team: ${title}`,
-        html: `<p><strong>${authorName}</strong> started a conversation:</p><p>${initialMessage}</p><p><a href="${convUrl}">View and reply</a></p>`,
+        html: `<h2 style="margin: 0 0 8px 0; font-size: 18px; color: #333;">${title}</h2>
+        <p style="margin: 0 0 16px 0; color: #555;"><strong>${authorName}</strong> started a conversation:</p>
+        <div style="background-color: #f9fafb; border-left: 3px solid #6366f1; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">${initialMessageHtml}</div>
+        <p style="margin: 16px 0 0 0;"><a href="${convUrl}" style="display: inline-block; background-color: #6366f1; color: #ffffff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500;">View and reply</a></p>`,
         text: `${authorName} started a conversation: ${title}\n\n${initialMessage}\n\nView and reply: ${convUrl}`,
       })),
       true,
@@ -559,11 +583,14 @@ export const addConversationMessage = async (
       const convUrl = `${process.env.DEPLOY_URL ? `https://${process.env.DEPLOY_URL}` : "http://localhost:3000"}/${groupSlug}/${roundSlug}/freud/conversations/${conversationId}`;
       const authorName = message.author?.user?.name || message.author?.user?.username || "Someone";
 
+      const contentHtml = await mdToHtml(content);
       await sendEmails(
         Array.from(recipientEmails).map((email) => ({
           to: email,
           subject: `Re: ${fullConv.title}`,
-          html: `<p><strong>${authorName}</strong> replied:</p><p>${content}</p><p><a href="${convUrl}">View conversation</a></p>`,
+          html: `<p style="margin: 0 0 16px 0; color: #555;"><strong>${authorName}</strong> replied:</p>
+          <div style="background-color: #f9fafb; border-left: 3px solid #6366f1; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">${contentHtml}</div>
+          <p style="margin: 16px 0 0 0;"><a href="${convUrl}" style="display: inline-block; background-color: #6366f1; color: #ffffff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 500;">View conversation</a></p>`,
           text: `${authorName} replied:\n\n${content}\n\nView conversation: ${convUrl}`,
         })),
         true,
