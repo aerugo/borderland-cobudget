@@ -103,7 +103,7 @@ export const editBucket = combineResolvers(
 
     if (args.budgetItems) {
       args.budgetItems.forEach((item) => {
-        if (item.min >= item.max) {
+        if (item.max != null && item.min >= item.max) {
           throw new Error("Min amount should be greater than max amount");
         }
       });

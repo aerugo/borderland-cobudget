@@ -127,7 +127,7 @@ const EditBudgetModal = ({
     })
   );
 
-  const { handleSubmit, register, control } = useForm({
+  const { handleSubmit, register, control, setValue } = useForm({
     resolver: yupResolver(schema),
     // Convert cents to display units for form state (e.g., 30000 cents → 300)
     defaultValues: {
@@ -227,15 +227,14 @@ const EditBudgetModal = ({
             const budgetItemsToSend = variables.budgetItems?.map((item, i) => {
               const preId = getPreId(item.type, budgetTypeCount[item.type]);
               budgetTypeCount[item.type]++;
+              const includeMax =
+                item.max && maxAmountOpenInputs[item.id || preId];
               return {
                 ...item,
                 id: undefined,
                 min: Math.round(item.min * 100),
+                max: includeMax ? Math.round(item.max * 100) : null,
                 position: i,
-                ...(item.max &&
-                  maxAmountOpenInputs[item.id || preId] && {
-                    max: Math.round(item.max * 100),
-                  }),
               };
             }) ?? [];
             editBucket({
@@ -331,6 +330,7 @@ const EditBudgetModal = ({
                               <span
                                 className="absolute -right-2 -top-2 bg-gray-200 rounded-full flex items-center justify-center h-6 w-6 cursor-pointer"
                                 onClick={() => {
+                                  setValue(`budgetItems.${originalIndex}.max`, null);
                                   setMaxAmountOpenInputs({
                                     ...maxAmountOpenInputs,
                                     [id || getPreId(type, i)]: false,
