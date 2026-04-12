@@ -98,6 +98,9 @@ export default function ConversationList({
   const [dreamFilterOpen, setDreamFilterOpen] = useState(false);
   const [dreamFilterQuery, setDreamFilterQuery] = useState("");
   const dreamFilterRef = useRef<HTMLDivElement>(null);
+  const [formDreamOpen, setFormDreamOpen] = useState(false);
+  const [formDreamQuery, setFormDreamQuery] = useState("");
+  const formDreamRef = useRef<HTMLDivElement>(null);
   const [sortBy, setSortBy] = useState<
     "recent" | "oldest" | "titleAsc" | "titleDesc" | "dreamAsc" | "dreamDesc"
   >("recent");
@@ -115,6 +118,20 @@ export default function ConversationList({
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [dreamFilterOpen]);
+
+  useEffect(() => {
+    if (!formDreamOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (
+        formDreamRef.current &&
+        !formDreamRef.current.contains(e.target as Node)
+      ) {
+        setFormDreamOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [formDreamOpen]);
 
   const [convResult] = useQuery({
     query: CONVERSATIONS_QUERY,
@@ -144,6 +161,16 @@ export default function ConversationList({
       : allBuckets;
     return list.slice(0, 50);
   }, [allBuckets, dreamFilterQuery]);
+
+  const formDreamMatches = useMemo(() => {
+    const q = formDreamQuery.trim().toLowerCase();
+    const list = q
+      ? allBuckets.filter((d) =>
+          d.bucket.title?.toLowerCase().includes(q)
+        )
+      : allBuckets;
+    return list.slice(0, 50);
+  }, [allBuckets, formDreamQuery]);
 
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -199,6 +226,15 @@ export default function ConversationList({
     return sorted;
   }, [conversations, search, bucketFilterIds, sortBy]);
 
+  const toggleSelectedBucket = (id: string) => {
+    setSelectedBucketIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const toggleBucketFilter = (id: string) => {
     setBucketFilterIds((prev) => {
       const next = new Set(prev);
@@ -224,6 +260,7 @@ export default function ConversationList({
       setTitle("");
       setMessage("");
       setSelectedBucketIds(new Set());
+      setFormDreamQuery("");
     }
   };
 
@@ -251,27 +288,95 @@ export default function ConversationList({
           />
           <div>
             <div className="text-sm font-medium mb-1">Link to dreams:</div>
-            <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
-              {allBuckets.map((d) => (
-                <label
-                  key={d.bucket.id}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-1"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedBucketIds.has(d.bucket.id)}
-                    onChange={() => {
-                      setSelectedBucketIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(d.bucket.id)) next.delete(d.bucket.id);
-                        else next.add(d.bucket.id);
-                        return next;
-                      });
-                    }}
-                  />
-                  <span className="truncate">{d.bucket.title}</span>
-                </label>
-              ))}
+            <div ref={formDreamRef} className="relative">
+              <div
+                className="flex flex-wrap items-center gap-1 border rounded px-2 py-1 min-h-[38px] bg-white cursor-text"
+                onClick={() => setFormDreamOpen(true)}
+              >
+                {Array.from(selectedBucketIds).map((id) => {
+                  const bucket = bucketById.get(id);
+                  const label = bucket?.title ?? "Unknown";
+                  return (
+                    <span
+                      key={id}
+                      className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded"
+                    >
+                      <span className="truncate max-w-[140px]">{label}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectedBucket(id);
+                        }}
+                        aria-label={`Remove ${label}`}
+                        className="text-blue-600 hover:text-blue-900 leading-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+                <input
+                  type="text"
+                  value={formDreamQuery}
+                  onChange={(e) => {
+                    setFormDreamQuery(e.target.value);
+                    setFormDreamOpen(true);
+                  }}
+                  onFocus={() => setFormDreamOpen(true)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Backspace" &&
+                      formDreamQuery === "" &&
+                      selectedBucketIds.size > 0
+                    ) {
+                      const last = Array.from(selectedBucketIds).pop()!;
+                      toggleSelectedBucket(last);
+                    } else if (e.key === "Escape") {
+                      setFormDreamOpen(false);
+                    }
+                  }}
+                  placeholder={
+                    selectedBucketIds.size === 0 ? "Search dreams..." : ""
+                  }
+                  className="flex-1 min-w-[120px] text-sm outline-none bg-transparent"
+                />
+              </div>
+              {formDreamOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-y-auto z-20">
+                  {formDreamMatches.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">
+                      No matching dreams
+                    </div>
+                  ) : (
+                    formDreamMatches.map((d) => {
+                      const selected = selectedBucketIds.has(d.bucket.id);
+                      return (
+                        <button
+                          type="button"
+                          key={d.bucket.id}
+                          onClick={() => {
+                            toggleSelectedBucket(d.bucket.id);
+                            setFormDreamQuery("");
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-blue-50 ${
+                            selected ? "bg-blue-50/60" : ""
+                          }`}
+                        >
+                          <span
+                            className={`inline-block w-4 text-blue-600 ${
+                              selected ? "" : "invisible"
+                            }`}
+                          >
+                            ✓
+                          </span>
+                          <span className="truncate">{d.bucket.title}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <textarea
