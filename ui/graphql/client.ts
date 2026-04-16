@@ -62,6 +62,10 @@ export const client = (
           OC_Collective: () => null,
           OC_Parent: () => null,
           FreudBucketData: () => null,
+          FreudReviewer: () => null,
+          FreudReviewAction: () => null,
+          InstanceSettings: () => null,
+          GroupSubscriptionStatus: () => null,
         },
         updates: {
           Mutation: {
@@ -583,6 +587,11 @@ export const client = (
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
             },
             createDreamReviewComment(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            deleteDreamReviewComment(_result, _args, cache) {
               cache.inspectFields("Query")
                 .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));

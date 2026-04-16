@@ -6,6 +6,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
 } from "@mui/material";
 import { gql, useMutation } from "urql";
 import { FormattedNumber } from "react-intl";
@@ -23,6 +24,49 @@ const APPROVE_BUCKET = gql`
     }
   }
 `;
+
+type SortField =
+  | "dream"
+  | "tag"
+  | "progress"
+  | "funders"
+  | "funded"
+  | "goal"
+  | "stretch"
+  | "reviewedBy"
+  | "cocreators"
+  | "approved"
+  | "notes";
+type SortDir = "asc" | "desc";
+
+function getSortValue(d: any, field: SortField): string | number {
+  switch (field) {
+    case "dream":
+      return d.bucket.title.toLowerCase();
+    case "tag":
+      return d.dreamReviewTags.map((t) => t.value).sort().join(",").toLowerCase();
+    case "progress":
+      return d.goal > 0 ? d.funded / d.goal : 0;
+    case "funders":
+      return d.funders || 0;
+    case "funded":
+      return d.funded;
+    case "goal":
+      return d.goal;
+    case "stretch":
+      return d.stretch;
+    case "reviewedBy":
+      return d.reviewedBy.length;
+    case "cocreators":
+      return (d.bucket.cocreators || []).length;
+    case "approved":
+      return d.bucket.approved ? 1 : 0;
+    case "notes":
+      return d.reviewCommentCount;
+    default:
+      return 0;
+  }
+}
 
 interface DreamReviewTableProps {
   bucketData: any[];
@@ -51,6 +95,8 @@ export default function DreamReviewTable({
   const [approvedFilter, setApprovedFilter] = useState<string>("");
   const [publishedFilter, setPublishedFilter] = useState<string>("");
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [, approveBucket] = useMutation(APPROVE_BUCKET);
 
   const hasActiveFilters = search || tagFilter || reviewFilter || approvedFilter || publishedFilter;
@@ -61,6 +107,21 @@ export default function DreamReviewTable({
     setReviewFilter("");
     setApprovedFilter("");
     setPublishedFilter("");
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDir === "asc") {
+        setSortDir("desc");
+      } else {
+        // Third click clears sort
+        setSortField(null);
+        setSortDir("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
   };
 
   const filtered = useMemo(() => {
@@ -89,8 +150,39 @@ export default function DreamReviewTable({
     } else if (publishedFilter === "no") {
       result = result.filter((d) => !d.bucket.published);
     }
+    if (sortField) {
+      result = [...result].sort((a, b) => {
+        const aVal = getSortValue(a, sortField);
+        const bVal = getSortValue(b, sortField);
+        let cmp = 0;
+        if (typeof aVal === "string" && typeof bVal === "string") {
+          cmp = aVal.localeCompare(bVal);
+        } else {
+          cmp = (aVal as number) - (bVal as number);
+        }
+        return sortDir === "desc" ? -cmp : cmp;
+      });
+    }
     return result;
-  }, [bucketData, search, tagFilter, reviewFilter, approvedFilter, publishedFilter]);
+  }, [bucketData, search, tagFilter, reviewFilter, approvedFilter, publishedFilter, sortField, sortDir]);
+
+  const sortableHeader = (field: SortField, label: string, align?: "right" | "center") => (
+    <TableCell
+      className={`!font-semibold !text-xs !text-gray-500 ${
+        align === "right" ? "!text-right" : align === "center" ? "!text-center" : ""
+      }`}
+      sortDirection={sortField === field ? sortDir : false}
+    >
+      <TableSortLabel
+        active={sortField === field}
+        direction={sortField === field ? sortDir : "asc"}
+        onClick={() => handleSort(field)}
+        className="!text-xs"
+      >
+        {label}
+      </TableSortLabel>
+    </TableCell>
+  );
 
   return (
     <>
@@ -174,39 +266,17 @@ export default function DreamReviewTable({
               <TableCell className="!font-semibold !text-xs !text-gray-500 w-8">
                 #
               </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">
-                Dream
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">
-                Tag
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">
-                Progress
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">
-                Funders
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">
-                Funded
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">
-                Goal
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">
-                Stretch
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">
-                Reviewed By
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">
-                Cocreators
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-center">
-                Approved
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-center">
-                Notes
-              </TableCell>
+              {sortableHeader("dream", "Dream")}
+              {sortableHeader("tag", "Tag")}
+              {sortableHeader("progress", "Progress", "right")}
+              {sortableHeader("funders", "Funders", "right")}
+              {sortableHeader("funded", "Funded", "right")}
+              {sortableHeader("goal", "Goal", "right")}
+              {sortableHeader("stretch", "Stretch", "right")}
+              {sortableHeader("reviewedBy", "Reviewed By")}
+              {sortableHeader("cocreators", "Cocreators")}
+              {sortableHeader("approved", "Approved", "center")}
+              {sortableHeader("notes", "Notes", "center")}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -276,10 +346,7 @@ export default function DreamReviewTable({
                   </TableCell>
                   <TableCell className="!py-1">
                     <ReviewerCell
-                      bucketId={d.bucket.id}
                       reviewedBy={d.reviewedBy}
-                      adminModMembers={adminModMembers}
-                      currentMemberId={currentMemberId}
                     />
                   </TableCell>
                   <TableCell className="!py-1">

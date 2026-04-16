@@ -23,8 +23,11 @@ export const dreamReviewTable = async (
     where: { roundId, deleted: { not: true } },
     include: {
       dreamReviewTags: true,
-      dreamReviews: { include: { reviewer: { include: { user: true } } } },
       _count: { select: { dreamReviewComments: true } },
+      flags: {
+        include: { collMember: { include: { user: true } }, guideline: true },
+        orderBy: { createdAt: "asc" },
+      },
       cocreators: { include: { user: true } },
       tags: true,
       BudgetItems: true,
@@ -51,6 +54,56 @@ export const dreamReviewTable = async (
       bucket.Contributions.map((c) => c.roundMemberId)
     );
 
+    // Derive reviewers from flag actions (peer review),
+    // ordered by most recent action last.
+    // Flags before FLAG_ATTRIBUTION_FIX_DATE have unreliable collMemberId
+    // due to a bug where the wrong round member was stored.
+    const FLAG_ATTRIBUTION_FIX_DATE = new Date("2026-04-16T18:00:00Z");
+
+    const reviewerMap = new Map<string, {
+      member: any;
+      lastVerdict: string | null;
+      lastActionAt: Date;
+      actions: { type: string; comment: string | null; guidelineTitle: string | null; createdAt: Date }[];
+    }>();
+    const UNKNOWN_KEY = "__unknown__";
+
+    for (const f of bucket.flags) {
+      const isTrusted = f.createdAt >= FLAG_ATTRIBUTION_FIX_DATE;
+      let verdict: string | null = null;
+      if (f.type === "ALL_GOOD_FLAG") verdict = "pass";
+      else if (f.type === "RAISE_FLAG") verdict = "flag";
+
+      const action = {
+        type: f.type,
+        comment: f.comment,
+        guidelineTitle: f.guideline?.title ?? null,
+        createdAt: f.createdAt,
+      };
+
+      const key = isTrusted ? f.collMemberId : UNKNOWN_KEY;
+      const member = isTrusted ? f.collMember : null;
+
+      const existing = reviewerMap.get(key);
+      if (!existing) {
+        reviewerMap.set(key, {
+          member,
+          lastVerdict: verdict,
+          lastActionAt: f.createdAt,
+          actions: [action],
+        });
+      } else {
+        existing.lastActionAt = f.createdAt;
+        existing.actions.push(action);
+        if (verdict) {
+          existing.lastVerdict = verdict;
+        }
+      }
+    }
+    const reviewedBy = Array.from(reviewerMap.values())
+      .sort((a, b) => new Date(a.lastActionAt).getTime() - new Date(b.lastActionAt).getTime())
+      .map(({ member, lastVerdict, actions }) => ({ member, lastVerdict, actions }));
+
     return {
       bucket,
       goal: minGoal / 100,
@@ -61,7 +114,7 @@ export const dreamReviewTable = async (
       progress: minGoal > 0 ? funded / minGoal : 0,
       dreamReviewTags: bucket.dreamReviewTags,
       hearts: [],
-      reviewedBy: bucket.dreamReviews.map((r) => r.reviewer),
+      reviewedBy,
       reviewCommentCount: bucket._count.dreamReviewComments,
     };
   });
@@ -108,7 +161,10 @@ export const freudData = async (
     where: { roundId, deleted: { not: true } },
     include: {
       dreamReviewTags: true,
-      dreamReviews: { include: { reviewer: { include: { user: true } } } },
+      flags: {
+        include: { collMember: { include: { user: true } }, guideline: true },
+        orderBy: { createdAt: "asc" },
+      },
       freudHearts: { include: { member: { include: { user: true } } } },
       tags: true,
       BudgetItems: true,
@@ -116,6 +172,9 @@ export const freudData = async (
     },
     orderBy: { createdAt: "asc" },
   });
+
+  const FLAG_ATTRIBUTION_FIX_DATE = new Date("2026-04-16T18:00:00Z");
+  const UNKNOWN_KEY = "__unknown__";
 
   return buckets.map((bucket) => {
     const minGoal = bucket.BudgetItems.reduce(
@@ -135,6 +194,41 @@ export const freudData = async (
       bucket.Contributions.map((c) => c.roundMemberId)
     );
 
+    const reviewerMap = new Map<string, {
+      member: any;
+      lastVerdict: string | null;
+      lastActionAt: Date;
+      actions: { type: string; comment: string | null; guidelineTitle: string | null; createdAt: Date }[];
+    }>();
+    for (const f of bucket.flags) {
+      const isTrusted = f.createdAt >= FLAG_ATTRIBUTION_FIX_DATE;
+      let verdict: string | null = null;
+      if (f.type === "ALL_GOOD_FLAG") verdict = "pass";
+      else if (f.type === "RAISE_FLAG") verdict = "flag";
+
+      const action = {
+        type: f.type,
+        comment: f.comment,
+        guidelineTitle: f.guideline?.title ?? null,
+        createdAt: f.createdAt,
+      };
+
+      const key = isTrusted ? f.collMemberId : UNKNOWN_KEY;
+      const member = isTrusted ? f.collMember : null;
+
+      const existing = reviewerMap.get(key);
+      if (!existing) {
+        reviewerMap.set(key, { member, lastVerdict: verdict, lastActionAt: f.createdAt, actions: [action] });
+      } else {
+        existing.lastActionAt = f.createdAt;
+        existing.actions.push(action);
+        if (verdict) existing.lastVerdict = verdict;
+      }
+    }
+    const reviewedBy = Array.from(reviewerMap.values())
+      .sort((a, b) => new Date(a.lastActionAt).getTime() - new Date(b.lastActionAt).getTime())
+      .map(({ member, lastVerdict, actions }) => ({ member, lastVerdict, actions }));
+
     return {
       bucket,
       goal: minGoal / 100,
@@ -145,7 +239,7 @@ export const freudData = async (
       progress: minGoal > 0 ? funded / minGoal : 0,
       dreamReviewTags: bucket.dreamReviewTags,
       hearts: bucket.freudHearts,
-      reviewedBy: bucket.dreamReviews.map((r) => r.reviewer),
+      reviewedBy,
       reviewCommentCount: 0,
     };
   });

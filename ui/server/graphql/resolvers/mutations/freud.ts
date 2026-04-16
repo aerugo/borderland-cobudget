@@ -177,7 +177,7 @@ export const removeDreamReviewer = async (
 
 export const createDreamReviewComment = async (
   _parent,
-  { bucketId, content },
+  { bucketId, content, verdict },
   { user, ss }
 ) => {
   const roundId = await getRoundIdFromBucket(bucketId);
@@ -187,7 +187,7 @@ export const createDreamReviewComment = async (
   });
   if (!member) throw new Error("Round member not found");
   const comment = await prisma.dreamReviewComment.create({
-    data: { bucketId, authorId: member.id, content },
+    data: { bucketId, authorId: member.id, content, verdict: verdict || null },
     include: { author: { include: { user: true } } },
   });
 
@@ -238,7 +238,7 @@ export const createDreamReviewComment = async (
 
 export const editDreamReviewComment = async (
   _parent,
-  { id, content },
+  { id, content, verdict },
   { user, ss }
 ) => {
   const comment = await prisma.dreamReviewComment.findUnique({
@@ -249,7 +249,7 @@ export const editDreamReviewComment = async (
   await assertAdminOrMod(comment.bucket.roundId, user?.id, ss);
   return prisma.dreamReviewComment.update({
     where: { id },
-    data: { content },
+    data: { content, verdict: verdict === undefined ? undefined : verdict || null },
     include: { author: { include: { user: true } } },
   });
 };

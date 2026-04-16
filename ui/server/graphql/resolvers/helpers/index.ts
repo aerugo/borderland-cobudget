@@ -62,10 +62,16 @@ export async function isAndGetCollMember({
 }) {
   let collMember = null;
   if (bucketId) {
-    collMember = await prisma.roundMember.findFirst({
-      where: { buckets: { some: { id: bucketId } } },
-      include,
+    const bucket = await prisma.bucket.findUnique({
+      where: { id: bucketId },
+      select: { roundId: true },
     });
+    if (bucket) {
+      collMember = await prisma.roundMember.findUnique({
+        where: { userId_roundId: { userId, roundId: bucket.roundId } },
+        include,
+      });
+    }
   } else if (roundId) {
     collMember = await prisma.roundMember.findUnique({
       where: {
@@ -96,10 +102,16 @@ export async function isAndGetCollMemberOrGroupAdmin({
   let groupMember = null;
 
   if (bucketId) {
-    collMember = await prisma.roundMember.findFirst({
-      where: { buckets: { some: { id: bucketId } } },
-      include,
+    const bucket = await prisma.bucket.findUnique({
+      where: { id: bucketId },
+      select: { roundId: true },
     });
+    if (bucket) {
+      collMember = await prisma.roundMember.findUnique({
+        where: { userId_roundId: { userId, roundId: bucket.roundId } },
+        include,
+      });
+    }
   } else if (roundId) {
     collMember = await prisma.roundMember.findUnique({
       where: {

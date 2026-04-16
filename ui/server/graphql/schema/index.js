@@ -439,8 +439,8 @@ const schema = gql`
     removeDreamReviewTag(bucketId: ID!, tagId: ID!): Bucket!
     addDreamReviewer(bucketId: ID!, reviewerId: ID!): DreamReview!
     removeDreamReviewer(bucketId: ID!, reviewerId: ID!): Boolean!
-    createDreamReviewComment(bucketId: ID!, content: String!): DreamReviewComment!
-    editDreamReviewComment(id: ID!, content: String!): DreamReviewComment!
+    createDreamReviewComment(bucketId: ID!, content: String!, verdict: String): DreamReviewComment!
+    editDreamReviewComment(id: ID!, content: String!, verdict: String): DreamReviewComment!
     deleteDreamReviewComment(id: ID!): Boolean!
     toggleFreudHeart(bucketId: ID!): Boolean!
     saveFreudSnapshot(roundId: ID!, algorithm: String!, data: JSON!): FreudSnapshot!
@@ -1149,6 +1149,7 @@ const schema = gql`
     id: ID!
     author: RoundMember!
     content: String!
+    verdict: String
     createdAt: Date!
     updatedAt: Date!
   }
@@ -1156,6 +1157,19 @@ const schema = gql`
   type FreudHeart {
     id: ID!
     member: RoundMember!
+  }
+
+  type FreudReviewAction {
+    type: String!
+    comment: String
+    guidelineTitle: String
+    createdAt: Date!
+  }
+
+  type FreudReviewer {
+    member: RoundMember
+    lastVerdict: String
+    actions: [FreudReviewAction!]!
   }
 
   type FreudBucketData {
@@ -1168,7 +1182,7 @@ const schema = gql`
     progress: Float!
     dreamReviewTags: [DreamReviewTag!]!
     hearts: [FreudHeart!]!
-    reviewedBy: [RoundMember!]!
+    reviewedBy: [FreudReviewer!]!
     reviewCommentCount: Int!
   }
 

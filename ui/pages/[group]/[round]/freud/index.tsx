@@ -36,11 +36,20 @@ const DREAM_REVIEW_QUERY = gql`
         color
       }
       reviewedBy {
-        id
-        user {
+        member {
           id
-          username
-          name
+          user {
+            id
+            username
+            name
+          }
+        }
+        lastVerdict
+        actions {
+          type
+          comment
+          guidelineTitle
+          createdAt
         }
       }
       reviewCommentCount
@@ -75,22 +84,22 @@ const FreudReviewPage = ({ round, currentUser, currentGroup }) => {
     currentUser?.currentCollMember?.isModerator ||
     currentUser?.currentGroupMember?.isAdmin;
 
-  if (!isAdminOrMod || !round) return null;
-
   const groupSlug = router.query.group as string;
   const roundSlug = router.query.round as string;
 
   const [reviewResult] = useQuery({
     query: DREAM_REVIEW_QUERY,
-    variables: { roundId: round.id },
-    pause: !round?.id,
+    variables: { roundId: round?.id },
+    pause: !round?.id || !isAdminOrMod,
   });
 
   const [membersResult] = useQuery({
     query: MEMBERS_QUERY,
-    variables: { roundId: round.id },
-    pause: !round?.id,
+    variables: { roundId: round?.id },
+    pause: !round?.id || !isAdminOrMod,
   });
+
+  if (!isAdminOrMod || !round) return null;
 
   const bucketData = reviewResult.data?.dreamReviewTable ?? [];
   const allTags = reviewResult.data?.dreamReviewTags ?? [];

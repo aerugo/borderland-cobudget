@@ -45,12 +45,15 @@ const FREUD_DATA_QUERY = gql`
         }
       }
       reviewedBy {
-        id
-        user {
+        member {
           id
-          username
-          name
+          user {
+            id
+            username
+            name
+          }
         }
+        lastVerdict
       }
     }
   }

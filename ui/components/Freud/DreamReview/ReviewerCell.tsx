@@ -1,133 +1,145 @@
 import { useState } from "react";
-import { gql, useMutation } from "urql";
 import Tooltip from "@tippyjs/react";
-import Avatar from "components/Avatar";
+import dayjs from "dayjs";
 
-const ADD_REVIEWER = gql`
-  mutation AddDreamReviewer($bucketId: ID!, $reviewerId: ID!) {
-    addDreamReviewer(bucketId: $bucketId, reviewerId: $reviewerId) {
-      id
-      reviewer {
-        id
-        user {
-          id
-          username
-        }
-      }
-    }
-  }
-`;
+interface ReviewAction {
+  type: string;
+  comment: string | null;
+  guidelineTitle: string | null;
+  createdAt: string;
+}
 
-const REMOVE_REVIEWER = gql`
-  mutation RemoveDreamReviewer($bucketId: ID!, $reviewerId: ID!) {
-    removeDreamReviewer(bucketId: $bucketId, reviewerId: $reviewerId)
-  }
-`;
+interface FreudReviewer {
+  member: { id: string; user: any } | null;
+  lastVerdict: string | null;
+  actions: ReviewAction[];
+}
 
-export default function ReviewerCell({
-  bucketId,
-  reviewedBy,
-  adminModMembers,
-  currentMemberId,
+const ACTION_LABELS: Record<string, string> = {
+  ALL_GOOD_FLAG: "✅ All Clear",
+  RAISE_FLAG: "❌ Raised Flag",
+  RESOLVE_FLAG: "🔧 Resolved Flag",
+};
+
+function ReviewerPopover({
+  reviewer,
+  onClose,
 }: {
-  bucketId: string;
-  reviewedBy: { id: string; user: any }[];
-  adminModMembers: { id: string; user: any }[];
-  currentMemberId: string;
+  reviewer: FreudReviewer;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [, addReviewer] = useMutation(ADD_REVIEWER);
-  const [, removeReviewer] = useMutation(REMOVE_REVIEWER);
+  const name = reviewer.member
+    ? reviewer.member.user?.name || reviewer.member.user?.username
+    : "Unknown";
 
-  const reviewerIds = new Set(reviewedBy.map((r) => r.id));
-
-  const handleToggle = async (memberId: string) => {
-    if (reviewerIds.has(memberId)) {
-      await removeReviewer({ bucketId, reviewerId: memberId });
-    } else {
-      await addReviewer({ bucketId, reviewerId: memberId });
-    }
-  };
-
-  const content = (
+  return (
     <div
-      className="bg-white border rounded shadow-lg p-2 min-w-[200px]"
+      className="bg-white border rounded-lg shadow-xl w-[320px] max-h-[350px] flex flex-col"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
-          setOpen(false);
+          onClose();
         }
       }}
     >
-      <div className="flex items-center justify-between mb-1 px-1">
-        <div className="text-xs text-gray-400 uppercase tracking-wide">
-          Reviewers
-        </div>
+      <div className="px-3 py-2 border-b flex items-center gap-2">
+        <span className="text-sm font-medium flex-1 truncate">{name}</span>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={onClose}
           aria-label="Close"
-          className="text-gray-400 hover:text-gray-700 leading-none text-lg"
+          className="text-gray-400 hover:text-gray-700 leading-none text-lg px-1"
         >
           ×
         </button>
       </div>
-      {!reviewerIds.has(currentMemberId) && (
-        <button
-          onClick={() => handleToggle(currentMemberId)}
-          className="w-full px-2 py-1.5 text-sm rounded bg-blue-50 hover:bg-blue-100 text-blue-700 text-left mb-1 font-medium"
-        >
-          + Add me
-        </button>
-      )}
-      {adminModMembers.map((member) => (
-        <button
-          key={member.id}
-          onClick={() => handleToggle(member.id)}
-          className={`flex items-center gap-2 w-full px-2 py-1 text-sm rounded hover:bg-gray-50 text-left ${
-            reviewerIds.has(member.id) ? "bg-green-50" : ""
-          }`}
-        >
-          <Avatar user={member.user} size="xs" />
-          <span className="flex-1">
-            {member.user?.name || member.user?.username || "Unknown"}
-          </span>
-          {reviewerIds.has(member.id) && (
-            <span className="text-xs text-green-600">✓</span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-
-  return (
-    <Tooltip
-      content={content}
-      interactive
-      visible={open}
-      onClickOutside={() => setOpen(false)}
-      placement="bottom-start"
-      appendTo={() => document.body}
-      arrow={false}
-      theme="freud-popover"
-    >
-      <div
-        className="flex items-center gap-1 cursor-pointer min-h-[24px]"
-        onClick={() => setOpen(!open)}
-      >
-        {reviewedBy.map((reviewer) => (
-          <div key={reviewer.id} className="flex items-center gap-1">
-            <Avatar user={reviewer.user} size="xs" />
-            <span className="text-xs text-gray-700 truncate max-w-[80px]">
-              {reviewer.user?.name || reviewer.user?.username}
-            </span>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {reviewer.actions.length === 0 && (
+          <div className="text-xs text-gray-400 text-center py-4">
+            No review actions
+          </div>
+        )}
+        {reviewer.actions.map((action, idx) => (
+          <div key={idx}>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-xs font-medium">
+                {ACTION_LABELS[action.type] || action.type}
+              </span>
+              <span className="text-xs text-gray-400 ml-auto">
+                {dayjs(action.createdAt).format("MMM D, YYYY [at] h:mm A")}
+              </span>
+            </div>
+            {action.guidelineTitle && (
+              <div className="text-xs text-gray-500 italic">
+                {action.guidelineTitle}
+              </div>
+            )}
+            {action.comment && (
+              <div className="text-sm text-gray-700">{action.comment}</div>
+            )}
           </div>
         ))}
-        {reviewedBy.length === 0 && (
-          <span className="text-gray-300 text-xs">Unreviewed</span>
-        )}
-        <span className="text-gray-400 text-xs ml-auto">▾</span>
       </div>
-    </Tooltip>
+    </div>
+  );
+}
+
+export default function ReviewerCell({
+  reviewedBy,
+}: {
+  reviewedBy: FreudReviewer[];
+}) {
+  const [openReviewerKey, setOpenReviewerKey] = useState<string | null>(null);
+
+  return (
+    <div className="flex items-center gap-1.5 min-h-[24px] flex-wrap">
+      {reviewedBy.map((r, idx) => {
+        const key = r.member?.id ?? `unknown-${idx}`;
+        const name = r.member
+          ? r.member.user?.name || r.member.user?.username
+          : "Unknown";
+        return (
+          <Tooltip
+            key={key}
+            content={
+              openReviewerKey === key ? (
+                <ReviewerPopover
+                  reviewer={r}
+                  onClose={() => setOpenReviewerKey(null)}
+                />
+              ) : (
+                <span />
+              )
+            }
+            interactive
+            visible={openReviewerKey === key}
+            onClickOutside={() => setOpenReviewerKey(null)}
+            placement="bottom-start"
+            appendTo={() => document.body}
+            arrow={false}
+            theme="freud-popover"
+          >
+            <button
+              onClick={() =>
+                setOpenReviewerKey(openReviewerKey === key ? null : key)
+              }
+              className="flex items-center gap-0.5 hover:bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-700"
+            >
+              <span>
+                {r.lastVerdict === "flag"
+                  ? "❌"
+                  : r.lastVerdict === "pass"
+                  ? "✅"
+                  : "⬜"}
+              </span>
+              <span className="truncate max-w-[80px]">{name}</span>
+            </button>
+          </Tooltip>
+        );
+      })}
+      {reviewedBy.length === 0 && (
+        <span className="text-gray-300 text-xs">—</span>
+      )}
+    </div>
   );
 }

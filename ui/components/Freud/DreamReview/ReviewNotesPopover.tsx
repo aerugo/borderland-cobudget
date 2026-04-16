@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import Tooltip from "@tippyjs/react";
 import Avatar from "components/Avatar";
@@ -9,6 +9,7 @@ const COMMENTS_QUERY = gql`
     dreamReviewComments(bucketId: $bucketId) {
       id
       content
+      verdict
       createdAt
       author {
         id
@@ -23,16 +24,16 @@ const COMMENTS_QUERY = gql`
 `;
 
 const CREATE_COMMENT = gql`
-  mutation CreateDreamReviewComment($bucketId: ID!, $content: String!) {
-    createDreamReviewComment(bucketId: $bucketId, content: $content) {
+  mutation CreateDreamReviewComment($bucketId: ID!, $content: String!, $verdict: String) {
+    createDreamReviewComment(bucketId: $bucketId, content: $content, verdict: $verdict) {
       id
     }
   }
 `;
 
 const EDIT_COMMENT = gql`
-  mutation EditDreamReviewComment($id: ID!, $content: String!) {
-    editDreamReviewComment(id: $id, content: $content) {
+  mutation EditDreamReviewComment($id: ID!, $content: String!, $verdict: String) {
+    editDreamReviewComment(id: $id, content: $content, verdict: $verdict) {
       id
     }
   }
@@ -59,8 +60,10 @@ export default function ReviewNotesPopover({
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [verdict, setVerdict] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [editVerdict, setEditVerdict] = useState<string>("");
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -116,17 +119,27 @@ export default function ReviewNotesPopover({
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
-    await createComment({ bucketId, content: input.trim() });
+    await createComment({
+      bucketId,
+      content: input.trim(),
+      verdict: verdict || null,
+    });
     setInput("");
+    setVerdict("");
     setShowMentions(false);
     reexecuteComments({ requestPolicy: "network-only" });
   };
 
   const handleEdit = async (id: string) => {
     if (!editContent.trim()) return;
-    await editComment({ id, content: editContent.trim() });
+    await editComment({
+      id,
+      content: editContent.trim(),
+      verdict: editVerdict || null,
+    });
     setEditingId(null);
     setEditContent("");
+    setEditVerdict("");
     reexecuteComments({ requestPolicy: "network-only" });
   };
 
@@ -138,6 +151,12 @@ export default function ReviewNotesPopover({
   // Render @mentions as bold in comment text
   const renderContent = (text: string) => {
     return text.replace(/@(\w+)/g, '<strong>@$1</strong>');
+  };
+
+  const verdictLabel = (v: string | null) => {
+    if (v === "pass") return "✅ Pass";
+    if (v === "flag") return "❌ Flag";
+    return null;
   };
 
   const popoverContent = (
@@ -182,6 +201,9 @@ export default function ReviewNotesPopover({
                 {comment.author?.user?.name ||
                   comment.author?.user?.username}
               </span>
+              {verdictLabel(comment.verdict) && (
+                <span className="text-xs">{verdictLabel(comment.verdict)}</span>
+              )}
               <span className="text-xs text-gray-400 ml-auto">
                 {dayjs(comment.createdAt).format("MMM D, YYYY [at] h:mm A")}
               </span>
@@ -191,6 +213,7 @@ export default function ReviewNotesPopover({
                     onClick={() => {
                       setEditingId(comment.id);
                       setEditContent(comment.content);
+                      setEditVerdict(comment.verdict || "");
                     }}
                     className="text-xs text-blue-400 hover:text-blue-600"
                   >
@@ -206,24 +229,41 @@ export default function ReviewNotesPopover({
               )}
             </div>
             {editingId === comment.id ? (
-              <div className="ml-6 flex gap-1">
+              <div className="ml-6 space-y-1">
                 <input
                   type="text"
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="border rounded px-2 py-0.5 text-xs flex-1"
+                  className="border rounded px-2 py-0.5 text-xs w-full"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleEdit(comment.id);
                     if (e.key === "Escape") setEditingId(null);
                   }}
                 />
-                <button
-                  onClick={() => handleEdit(comment.id)}
-                  className="text-xs text-blue-600"
-                >
-                  Save
-                </button>
+                <div className="flex items-center gap-1">
+                  <select
+                    value={editVerdict}
+                    onChange={(e) => setEditVerdict(e.target.value)}
+                    className="border rounded px-1 py-0.5 text-xs"
+                  >
+                    <option value="">No verdict</option>
+                    <option value="pass">✅ Pass</option>
+                    <option value="flag">❌ Flag</option>
+                  </select>
+                  <button
+                    onClick={() => handleEdit(comment.id)}
+                    className="text-xs text-blue-600 ml-auto"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="text-xs text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
               <div
@@ -255,13 +295,22 @@ export default function ReviewNotesPopover({
             ))}
           </div>
         )}
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
+          <select
+            value={verdict}
+            onChange={(e) => setVerdict(e.target.value)}
+            className="border rounded px-1 py-1 text-xs w-20"
+          >
+            <option value="">—</option>
+            <option value="pass">✅ Pass</option>
+            <option value="flag">❌ Flag</option>
+          </select>
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
-            placeholder="Reply or @ mention someone"
+            placeholder="Add a note..."
             className="border rounded px-2 py-1 text-sm flex-1"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !showMentions) {
