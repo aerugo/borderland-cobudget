@@ -52,6 +52,14 @@ const DREAM_REVIEW_QUERY = gql`
           createdAt
         }
       }
+      assignedTo {
+        id
+        user {
+          id
+          username
+          name
+        }
+      }
       reviewCommentCount
     }
     dreamReviewTags(roundId: $roundId) {
@@ -131,6 +139,7 @@ const FreudReviewPage = ({ round, currentUser, currentGroup }) => {
             <DreamReviewTable
               bucketData={bucketData}
               allTags={allTags}
+              allMembers={allMembers}
               adminModMembers={adminModMembers}
               currentMemberId={currentUser?.currentCollMember?.id ?? ""}
               roundId={round.id}

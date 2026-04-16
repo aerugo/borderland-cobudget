@@ -1183,6 +1183,7 @@ const schema = gql`
     dreamReviewTags: [DreamReviewTag!]!
     hearts: [FreudHeart!]!
     reviewedBy: [FreudReviewer!]!
+    assignedTo: [RoundMember!]!
     reviewCommentCount: Int!
   }
 

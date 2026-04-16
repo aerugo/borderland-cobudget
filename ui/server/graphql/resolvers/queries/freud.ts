@@ -28,6 +28,7 @@ export const dreamReviewTable = async (
         include: { collMember: { include: { user: true } }, guideline: true },
         orderBy: { createdAt: "asc" },
       },
+      dreamReviews: { include: { reviewer: { include: { user: true } } } },
       cocreators: { include: { user: true } },
       tags: true,
       BudgetItems: true,
@@ -115,6 +116,7 @@ export const dreamReviewTable = async (
       dreamReviewTags: bucket.dreamReviewTags,
       hearts: [],
       reviewedBy,
+      assignedTo: bucket.dreamReviews.map((r) => r.reviewer),
       reviewCommentCount: bucket._count.dreamReviewComments,
     };
   });
@@ -165,6 +167,7 @@ export const freudData = async (
         include: { collMember: { include: { user: true } }, guideline: true },
         orderBy: { createdAt: "asc" },
       },
+      dreamReviews: { include: { reviewer: { include: { user: true } } } },
       freudHearts: { include: { member: { include: { user: true } } } },
       tags: true,
       BudgetItems: true,
@@ -240,6 +243,7 @@ export const freudData = async (
       dreamReviewTags: bucket.dreamReviewTags,
       hearts: bucket.freudHearts,
       reviewedBy,
+      assignedTo: bucket.dreamReviews.map((r) => r.reviewer),
       reviewCommentCount: 0,
     };
   });

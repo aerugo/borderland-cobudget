@@ -25,6 +25,24 @@ const APPROVE_BUCKET = gql`
   }
 `;
 
+const ADD_REVIEWER = gql`
+  mutation AddDreamReviewer($bucketId: ID!, $reviewerId: ID!) {
+    addDreamReviewer(bucketId: $bucketId, reviewerId: $reviewerId) {
+      id
+      reviewer {
+        id
+        user { id username name }
+      }
+    }
+  }
+`;
+
+const REMOVE_REVIEWER = gql`
+  mutation RemoveDreamReviewer($bucketId: ID!, $reviewerId: ID!) {
+    removeDreamReviewer(bucketId: $bucketId, reviewerId: $reviewerId)
+  }
+`;
+
 type SortField =
   | "dream"
   | "tag"
@@ -34,6 +52,7 @@ type SortField =
   | "goal"
   | "stretch"
   | "reviewedBy"
+  | "assignedTo"
   | "cocreators"
   | "approved"
   | "notes";
@@ -57,6 +76,8 @@ function getSortValue(d: any, field: SortField): string | number {
       return d.stretch;
     case "reviewedBy":
       return d.reviewedBy.length;
+    case "assignedTo":
+      return (d.assignedTo || []).length;
     case "cocreators":
       return (d.bucket.cocreators || []).length;
     case "approved":
@@ -71,6 +92,7 @@ function getSortValue(d: any, field: SortField): string | number {
 interface DreamReviewTableProps {
   bucketData: any[];
   allTags: any[];
+  allMembers: any[];
   adminModMembers: any[];
   currentMemberId: string;
   roundId: string;
@@ -82,6 +104,7 @@ interface DreamReviewTableProps {
 export default function DreamReviewTable({
   bucketData,
   allTags,
+  allMembers,
   adminModMembers,
   currentMemberId,
   roundId,
@@ -98,6 +121,8 @@ export default function DreamReviewTable({
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [, approveBucket] = useMutation(APPROVE_BUCKET);
+  const [, addReviewer] = useMutation(ADD_REVIEWER);
+  const [, removeReviewer] = useMutation(REMOVE_REVIEWER);
 
   const hasActiveFilters = search || tagFilter || reviewFilter || approvedFilter || publishedFilter;
 
@@ -274,6 +299,7 @@ export default function DreamReviewTable({
               {sortableHeader("goal", "Goal", "right")}
               {sortableHeader("stretch", "Stretch", "right")}
               {sortableHeader("reviewedBy", "Reviewed By")}
+              {sortableHeader("assignedTo", "Assigned To")}
               {sortableHeader("cocreators", "Cocreators")}
               {sortableHeader("approved", "Approved", "center")}
               {sortableHeader("notes", "Notes", "center")}
@@ -350,6 +376,15 @@ export default function DreamReviewTable({
                     />
                   </TableCell>
                   <TableCell className="!py-1">
+                    <AssignedToCell
+                      bucketId={d.bucket.id}
+                      assignedTo={d.assignedTo || []}
+                      adminModMembers={adminModMembers}
+                      onAdd={(reviewerId) => addReviewer({ bucketId: d.bucket.id, reviewerId })}
+                      onRemove={(reviewerId) => removeReviewer({ bucketId: d.bucket.id, reviewerId })}
+                    />
+                  </TableCell>
+                  <TableCell className="!py-1">
                     <div className="flex flex-wrap gap-1">
                       {d.bucket.cocreators?.map((cc) => (
                         <span
@@ -388,7 +423,7 @@ export default function DreamReviewTable({
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="!text-center !text-gray-400 !py-8">
+                <TableCell colSpan={13} className="!text-center !text-gray-400 !py-8">
                   {bucketData.length === 0
                     ? "No dreams in this round yet"
                     : "No dreams match the current filters"}
@@ -399,5 +434,69 @@ export default function DreamReviewTable({
         </Table>
       </TableContainer>
     </>
+  );
+}
+
+function AssignedToCell({
+  bucketId,
+  assignedTo,
+  adminModMembers,
+  onAdd,
+  onRemove,
+}: {
+  bucketId: string;
+  assignedTo: any[];
+  adminModMembers: any[];
+  onAdd: (reviewerId: string) => void;
+  onRemove: (reviewerId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const assignedIds = new Set(assignedTo.map((m) => m.id));
+
+  const handleToggle = (member: any) => {
+    if (assignedIds.has(member.id)) {
+      onRemove(member.id);
+    } else {
+      onAdd(member.id);
+    }
+  };
+
+  const label = assignedTo.length > 0
+    ? assignedTo.map((m) => m.user?.username || m.user?.name || "?").join(", ")
+    : "—";
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-xs text-left truncate max-w-[140px] hover:text-blue-600"
+        title={label}
+      >
+        {label}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 bg-white border rounded shadow-lg py-1 min-w-[160px] max-h-48 overflow-y-auto">
+            {adminModMembers.map((m) => (
+              <label
+                key={m.id}
+                className="flex items-center gap-2 px-3 py-1 hover:bg-gray-50 cursor-pointer text-xs"
+              >
+                <input
+                  type="checkbox"
+                  checked={assignedIds.has(m.id)}
+                  onChange={() => handleToggle(m)}
+                />
+                {m.user?.username || m.user?.name || "?"}
+              </label>
+            ))}
+            {adminModMembers.length === 0 && (
+              <div className="px-3 py-1 text-xs text-gray-400">No admins/mods</div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
