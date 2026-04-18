@@ -98,17 +98,17 @@ export async function inviteRoundMembersHelper({
     );
   }
 
-  // 7. Insert new users in small batches
-  const BATCH_SIZE = 4;
-  for (let i = 0; i < newUsers.length; i += BATCH_SIZE) {
-    dbWrites.push(
-      prisma.user.createMany({
-        data: newUsers.slice(i, i + BATCH_SIZE).map((email) => ({ email })),
-        skipDuplicates: true,
-      })
-    );
-  }
   await Promise.all(dbWrites);
+
+  // 7. Insert new users in batches, sequentially — parallel fan-out with a
+  // tiny batch size exhausts the Prisma connection pool on large invites.
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < newUsers.length; i += BATCH_SIZE) {
+    await prisma.user.createMany({
+      data: newUsers.slice(i, i + BATCH_SIZE).map((email) => ({ email })),
+      skipDuplicates: true,
+    });
+  }
 
   // 8. Fetch newly created users
   const newlyAddedUsers = await prisma.user.findMany({
