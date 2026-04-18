@@ -19,6 +19,7 @@ import {
 } from "../helpers";
 import { verify } from "server/utils/jwt";
 import emailService from "server/services/EmailService/email.service";
+import { fetchGlobalBurnMembers } from "server/services/GlobalBurnService";
 import { inviteRoundMembersHelper } from "../helpers/inviteRoundMemberHelpers";
 import {
   allocateToMember,
@@ -131,6 +132,159 @@ export const editOCToken = combineResolvers(
       where: { id: roundId },
       data: { ocToken },
     });
+  }
+);
+
+// apiKey tri-state: null/undefined = unchanged, "" = clear, string = set.
+// Any change resets globalBurnVerified so admins must re-test before syncing.
+export const editGlobalBurnSettings = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId, instanceUrl, eventId, apiKey }) => {
+    const data: Prisma.RoundUpdateInput = {};
+
+    if (instanceUrl !== null && instanceUrl !== undefined) {
+      const trimmed = instanceUrl.trim().replace(/\/+$/, "");
+      data.globalBurnInstanceUrl = trimmed === "" ? null : trimmed;
+    }
+    if (eventId !== null && eventId !== undefined) {
+      const trimmed = eventId.trim();
+      data.globalBurnEventId = trimmed === "" ? null : trimmed;
+    }
+    if (apiKey !== null && apiKey !== undefined) {
+      data.globalBurnApiKey = apiKey === "" ? null : apiKey;
+    }
+
+    if (Object.keys(data).length > 0) {
+      data.globalBurnVerified = false;
+    }
+
+    return prisma.round.update({ where: { id: roundId }, data });
+  }
+);
+
+export const testGlobalBurnConnection = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    const verified = result.status === "OK";
+    const updatedRound = await prisma.round.update({
+      where: { id: roundId },
+      data: { globalBurnVerified: verified },
+    });
+
+    return {
+      status: result.status,
+      memberCount: result.status === "OK" ? result.emails.length : null,
+      detail: result.status === "UNREACHABLE" ? result.detail ?? null : null,
+      round: updatedRound,
+    };
+  }
+);
+
+export const syncGlobalBurnMembers = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId, dryRun }, { user: currentUser }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    if (result.status !== "OK") {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { globalBurnVerified: false },
+      });
+      return {
+        status: result.status,
+        totalInEvent: null,
+        alreadyMembers: null,
+        toInvite: null,
+        detail:
+          result.status === "UNREACHABLE" ? result.detail ?? null : null,
+        round: { ...round, globalBurnVerified: false },
+      };
+    }
+
+    const fetchedEmails = Array.from(new Set(result.emails));
+
+    const existingUsers = await prisma.user.findMany({
+      where: { email: { in: fetchedEmails } },
+      select: { id: true, email: true },
+    });
+    const existingUserIds = existingUsers.map((u) => u.id);
+    const existingRoundMembers =
+      existingUserIds.length > 0
+        ? await prisma.roundMember.findMany({
+            where: { roundId, userId: { in: existingUserIds } },
+            select: { userId: true },
+          })
+        : [];
+    const existingMemberUserIds = new Set(
+      existingRoundMembers.map((rm) => rm.userId)
+    );
+    const alreadyEmailSet = new Set(
+      existingUsers
+        .filter((u) => existingMemberUserIds.has(u.id))
+        .map((u) => u.email)
+    );
+
+    const toInviteEmails = fetchedEmails.filter(
+      (email) => !alreadyEmailSet.has(email)
+    );
+
+    const alreadyCount = fetchedEmails.length - toInviteEmails.length;
+
+    // Make sure verified stays true on successful fetches, even on dry run.
+    const updatedRound = round.globalBurnVerified
+      ? round
+      : await prisma.round.update({
+          where: { id: roundId },
+          data: { globalBurnVerified: true },
+        });
+
+    if (dryRun || toInviteEmails.length === 0) {
+      return {
+        status: "OK",
+        totalInEvent: fetchedEmails.length,
+        alreadyMembers: alreadyCount,
+        toInvite: toInviteEmails.length,
+        detail: null,
+        round: updatedRound,
+      };
+    }
+
+    await inviteRoundMembersHelper({
+      roundId,
+      emailsString: toInviteEmails.join(","),
+      currentUser,
+      onMembersToInvite: (membersToInvite, r, u) =>
+        emailService.bulkInviteMembers({
+          membersToInvite,
+          round: r,
+          currentUser: u,
+        }),
+    });
+
+    return {
+      status: "OK",
+      totalInEvent: fetchedEmails.length,
+      alreadyMembers: alreadyCount,
+      toInvite: toInviteEmails.length,
+      detail: null,
+      round: updatedRound,
+    };
   }
 );
 

@@ -376,6 +376,12 @@ export const ocTokenStatus = async (parent) => {
   } else return TOKEN_STATUS.EMPTY;
 };
 
+export const globalBurnApiKeyStatus = async (parent) => {
+  if (parent.globalBurnApiKey) {
+    return TOKEN_STATUS.PROVIDED;
+  } else return TOKEN_STATUS.EMPTY;
+};
+
 export const membersLimit = async (round) => {
   // Run queries in parallel
   const [group, currentCount] = await Promise.all([

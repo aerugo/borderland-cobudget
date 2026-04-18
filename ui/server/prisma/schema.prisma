@@ -247,6 +247,11 @@ model Round {
   ocVerified                Boolean?   @default(false)
   ocToken                   String?
 
+  globalBurnInstanceUrl String?
+  globalBurnEventId     String?
+  globalBurnApiKey      String?
+  globalBurnVerified    Boolean? @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

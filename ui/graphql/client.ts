@@ -555,6 +555,18 @@ export const client = (
                   cache.invalidate("Query", "membersPage", field.arguments);
                 });
             },
+            syncGlobalBurnMembers(result: any, _args, cache) {
+              // Only invalidate on a real sync (dryRun=false actually writes
+              // members). The response shape is identical either way, so we
+              // check whether the mutation was called with dryRun=true.
+              if (_args?.dryRun) return;
+              cache
+                .inspectFields("Query")
+                .filter((field) => field.fieldName === "membersPage")
+                .forEach((field) => {
+                  cache.invalidate("Query", "membersPage", field.arguments);
+                });
+            },
             // FREUD cache invalidation
             createDreamReviewTag(_result, _args, cache) {
               cache.inspectFields("Query")

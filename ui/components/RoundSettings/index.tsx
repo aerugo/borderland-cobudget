@@ -13,6 +13,7 @@ import Tags from "./Tags";
 import BucketReview from "./BucketReview";
 import Discourse from "./Discourse";
 import Integrations from "./Integrations";
+import InviteMembers from "./InviteMembers";
 import AppContext from "contexts/AppContext";
 import GroupSettings from "./GroupSettings";
 import WelcomeEmail from "./WelcomeEmail";
@@ -101,6 +102,11 @@ const RoundSettings = ({
         slug: "integrations",
         name: intl.formatMessage({ defaultMessage: "Integrations" }),
         component: Integrations,
+      },
+      {
+        slug: "invite-members",
+        name: intl.formatMessage({ defaultMessage: "Invite members" }),
+        component: InviteMembers,
       },
       {
         slug: "group",

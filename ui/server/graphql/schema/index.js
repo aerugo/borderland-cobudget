@@ -196,6 +196,17 @@ const schema = gql`
     ): Round!
     verifyOpencollective(roundId: ID!): Round
     editOCToken(roundId: ID!, ocToken: String): Round
+    editGlobalBurnSettings(
+      roundId: ID!
+      instanceUrl: String
+      eventId: String
+      apiKey: String
+    ): Round
+    testGlobalBurnConnection(roundId: ID!): GlobalBurnConnectionResult!
+    syncGlobalBurnMembers(
+      roundId: ID!
+      dryRun: Boolean!
+    ): GlobalBurnSyncResult!
     editRound(
       roundId: ID!
       slug: String
@@ -550,6 +561,10 @@ const schema = gql`
     ocWebhookUrl: String
     ocVerified: Boolean
     ocTokenStatus: OC_TokenStatus
+    globalBurnInstanceUrl: String
+    globalBurnEventId: String
+    globalBurnApiKeyStatus: OC_TokenStatus
+    globalBurnVerified: Boolean
     membersLimit: MembersLimit
     bucketsLimit: ResourceLimit
     expenses: [Expense]
@@ -702,6 +717,29 @@ const schema = gql`
   enum OC_TokenStatus {
     EMPTY
     PROVIDED
+  }
+
+  enum GlobalBurnConnectionStatus {
+    OK
+    INVALID_KEY
+    EVENT_NOT_FOUND
+    UNREACHABLE
+  }
+
+  type GlobalBurnConnectionResult {
+    status: GlobalBurnConnectionStatus!
+    memberCount: Int
+    detail: String
+    round: Round
+  }
+
+  type GlobalBurnSyncResult {
+    status: GlobalBurnConnectionStatus!
+    totalInEvent: Int
+    alreadyMembers: Int
+    toInvite: Int
+    detail: String
+    round: Round
   }
 
   type OC_Parent {

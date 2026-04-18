@@ -10,6 +10,7 @@ export const ROUND_QUERY = gql`
       id
       color
       numberOfApprovedMembers
+      totalInMembersBalances
       currency
       group {
         id

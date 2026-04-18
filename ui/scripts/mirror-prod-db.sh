@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Mirror Production Database to Local Development
+# Mirror Production Database (Neon) to Local Development
 #
-# This script downloads a dump from the production database and restores it
+# This script downloads a dump from the Neon production database and restores it
 # to your local Docker PostgreSQL instance.
 #
 # Prerequisites:
 #   - Docker must be running with postgres container (docker-compose up)
-#   - PROD_DATABASE must be set in .env.local
+#   - PROD_DATABASE must be set in .env.local (Neon connection string)
 #
 # Usage:
 #   cd ui && ./scripts/mirror-prod-db.sh
@@ -56,7 +56,7 @@ PROD_HOST=$(echo "$PROD_DATABASE" | sed -n 's/.*@\([^:\/]*\).*/\1/p')
 PROD_DB=$(echo "$PROD_DATABASE" | sed -n 's/.*\/\([^?]*\).*/\1/p')
 
 echo ""
-echo "Source (Production):"
+echo "Source (Neon Production):"
 echo "  Host: $PROD_HOST"
 echo "  Database: $PROD_DB"
 echo ""
@@ -92,7 +92,7 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 echo ""
-echo "[1/4] Dumping production database (using postgres:17 Docker image)..."
+echo "[1/4] Dumping Neon production database (using postgres:17 Docker image)..."
 echo "      This may take a few minutes..."
 
 # Use Docker with postgres:17 image to run pg_dump (avoids version mismatch)
