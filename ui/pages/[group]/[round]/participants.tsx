@@ -12,6 +12,7 @@ export const ROUND_QUERY = gql`
       numberOfApprovedMembers
       totalInMembersBalances
       currency
+      globalBurnVerified
       group {
         id
         name

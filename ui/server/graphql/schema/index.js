@@ -430,6 +430,12 @@ const schema = gql`
       amount: Int!
       type: AllocationType!
     ): [RoundMember]
+    bulkAllocateToGlobalBurnMembers(
+      roundId: ID!
+      amount: Int!
+      type: AllocationType!
+      dryRun: Boolean!
+    ): GlobalBurnAllocationResult!
     contribute(roundId: ID!, bucketId: ID!, amount: Int!): Bucket
 
     cancelFunding(bucketId: ID!): Bucket
@@ -738,6 +744,15 @@ const schema = gql`
     totalInEvent: Int
     alreadyMembers: Int
     toInvite: Int
+    detail: String
+    round: Round
+  }
+
+  type GlobalBurnAllocationResult {
+    status: GlobalBurnConnectionStatus!
+    matchedMembers: Int
+    totalApproved: Int
+    totalAmount: Int
     detail: String
     round: Round
   }

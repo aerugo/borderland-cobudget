@@ -23,6 +23,7 @@ import { fetchGlobalBurnMembers } from "server/services/GlobalBurnService";
 import { inviteRoundMembersHelper } from "../helpers/inviteRoundMemberHelpers";
 import {
   allocateToMember,
+  allocateToMembers,
   bulkAllocate as bulkAllocateController,
 } from "server/controller";
 import dayjs from "dayjs";
@@ -740,6 +741,80 @@ export const bulkAllocate = combineResolvers(
     // Return empty array - frontend only checks for errors, not the response data
     // Returning all members would trigger N+1 queries for each member's balance
     return [];
+  }
+);
+
+export const bulkAllocateToGlobalBurnMembers = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_, { roundId, amount, type, dryRun }, { user }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    if (!round.globalBurnVerified) {
+      return {
+        status: "UNREACHABLE",
+        matchedMembers: null,
+        totalApproved: null,
+        totalAmount: null,
+        detail: "Global Burn is not configured for this round",
+        round,
+      };
+    }
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    if (result.status !== "OK") {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { globalBurnVerified: false },
+      });
+      return {
+        status: result.status,
+        matchedMembers: null,
+        totalApproved: null,
+        totalAmount: null,
+        detail:
+          result.status === "UNREACHABLE" ? result.detail ?? null : null,
+        round: { ...round, globalBurnVerified: false },
+      };
+    }
+
+    const burnEmails = new Set(result.emails.map((e) => e.toLowerCase()));
+
+    const approvedMembers = await prisma.roundMember.findMany({
+      where: { roundId, isApproved: true },
+      include: { user: { include: { emailSettings: true } } },
+    });
+    const matched = approvedMembers.filter((m) =>
+      burnEmails.has((m.user.email ?? "").toLowerCase())
+    );
+
+    const currentAdminRM = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId } },
+    });
+    if (!currentAdminRM) throw new Error("Not a round member");
+
+    const { totalAmount } = await allocateToMembers({
+      roundId,
+      members: matched,
+      amount,
+      type,
+      allocatedBy: currentAdminRM.id,
+      dryRun,
+    });
+
+    return {
+      status: "OK",
+      matchedMembers: matched.length,
+      totalApproved: approvedMembers.length,
+      totalAmount,
+      detail: null,
+      round,
+    };
   }
 );
 

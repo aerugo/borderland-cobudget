@@ -90,30 +90,42 @@ export const allocateToMember = async ({
   }
 };
 
-export const bulkAllocate = async ({ roundId, amount, type, allocatedBy }) => {
+export const allocateToMembers = async ({
+  roundId,
+  members,
+  amount,
+  type,
+  allocatedBy,
+  dryRun = false,
+}: {
+  roundId: string;
+  members: RoundMember[];
+  amount: number;
+  type: AllocationType;
+  allocatedBy: string;
+  dryRun?: boolean;
+}) => {
   const prisma = importedPrisma;
 
   if (type === "SET" && amount < 0)
     throw new Error("Can't set negative values");
 
-  // Fetch approved members without loading all contributions/allocations
-  const members = await prisma.roundMember.findMany({
-    where: { roundId, isApproved: true },
-    include: {
-      user: { include: { emailSettings: true } },
-    },
-  });
+  if (members.length === 0) {
+    return { totalAmount: 0, memberCount: 0 };
+  }
+
+  const memberIds = members.map((m) => m.id);
 
   // Use aggregate queries to get totals efficiently (let the database do the work)
   const [allocationTotals, contributionTotals] = await Promise.all([
     prisma.allocation.groupBy({
       by: ["roundMemberId"],
-      where: { roundMemberId: { in: members.map((m) => m.id) } },
+      where: { roundMemberId: { in: memberIds } },
       _sum: { amount: true },
     }),
     prisma.contribution.groupBy({
       by: ["roundMemberId"],
-      where: { roundMemberId: { in: members.map((m) => m.id) } },
+      where: { roundMemberId: { in: memberIds } },
       _sum: { amount: true },
     }),
   ]);
@@ -138,6 +150,16 @@ export const bulkAllocate = async ({ roundId, amount, type, allocatedBy }) => {
     }
     return { ...member, adjustedAmount, balance };
   });
+
+  const totalAmount = membersWithCalculatedData.reduce(
+    (sum, m) => sum + (m.adjustedAmount ?? 0),
+    0
+  );
+
+  if (dryRun) {
+    return { totalAmount, memberCount: members.length };
+  }
+
   const allocationData = membersWithCalculatedData.map((member) => ({
     roundId,
     roundMemberId: member.id,
@@ -166,6 +188,25 @@ export const bulkAllocate = async ({ roundId, amount, type, allocatedBy }) => {
   } catch (error) {
     throw new Error("Failed to allocate to members: " + error.message);
   }
+
+  return { totalAmount, memberCount: members.length };
+};
+
+export const bulkAllocate = async ({ roundId, amount, type, allocatedBy }) => {
+  const members = await importedPrisma.roundMember.findMany({
+    where: { roundId, isApproved: true },
+    include: {
+      user: { include: { emailSettings: true } },
+    },
+  });
+
+  return allocateToMembers({
+    roundId,
+    members,
+    amount,
+    type,
+    allocatedBy,
+  });
 };
 
 export const getGroup = async ({

@@ -133,6 +133,15 @@ export const client = (
                   cache.invalidate("Query", "membersPage", field.arguments);
                 });
             },
+            bulkAllocateToGlobalBurnMembers(_result: any, args: any, cache) {
+              if (args?.dryRun) return;
+              cache
+                .inspectFields("Query")
+                .filter((field) => field.fieldName === "membersPage")
+                .forEach((field) => {
+                  cache.invalidate("Query", "membersPage", field.arguments);
+                });
+            },
             joinRound(result: any, args, cache) {
               if (result.joinRound) {
                 console.log({ result });

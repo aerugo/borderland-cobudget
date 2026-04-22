@@ -7,6 +7,7 @@ import { FormattedMessage, useIntl } from "react-intl";
 
 import Button from "components/Button";
 import { TOKEN_STATUS } from "../../../constants";
+import { globalBurnConnectionErrorMessage } from "utils/globalBurnStatus";
 
 const GLOBAL_BURN_ROUND = gql`
   query GlobalBurnRound($roundSlug: String!, $groupSlug: String!) {
@@ -76,33 +77,6 @@ type FormValues = {
   instanceUrl: string;
   eventId: string;
   apiKey: string;
-};
-
-const connectionErrorMessage = (
-  status: string,
-  detail: string | null | undefined,
-  intl: any
-): string => {
-  switch (status) {
-    case "INVALID_KEY":
-      return intl.formatMessage({
-        defaultMessage: "API key is invalid. Double-check the key and save again.",
-      });
-    case "EVENT_NOT_FOUND":
-      return intl.formatMessage({
-        defaultMessage:
-          "The event does not exist on that instance. Check the Event ID.",
-      });
-    case "UNREACHABLE":
-      return (
-        intl.formatMessage({
-          defaultMessage:
-            "Could not reach the instance. Check the Instance URL.",
-        }) + (detail ? ` (${detail})` : "")
-      );
-    default:
-      return intl.formatMessage({ defaultMessage: "Unknown error" });
-  }
 };
 
 type SyncCounts = {
@@ -189,7 +163,7 @@ const GlobalBurnSection = ({
         )
       );
     } else {
-      toast.error(connectionErrorMessage(result?.status, result?.detail, intl));
+      toast.error(globalBurnConnectionErrorMessage(result?.status, result?.detail, intl));
     }
   };
 
@@ -205,7 +179,7 @@ const GlobalBurnSection = ({
     }
     const result = syncData?.syncGlobalBurnMembers;
     if (result?.status !== "OK") {
-      toast.error(connectionErrorMessage(result?.status, result?.detail, intl));
+      toast.error(globalBurnConnectionErrorMessage(result?.status, result?.detail, intl));
       return;
     }
     setPreview({
@@ -226,7 +200,7 @@ const GlobalBurnSection = ({
     }
     const result = syncData?.syncGlobalBurnMembers;
     if (result?.status !== "OK") {
-      toast.error(connectionErrorMessage(result?.status, result?.detail, intl));
+      toast.error(globalBurnConnectionErrorMessage(result?.status, result?.detail, intl));
       return;
     }
     toast.success(

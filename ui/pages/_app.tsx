@@ -110,6 +110,7 @@ export const TOP_LEVEL_QUERY = gql`
       grantingCloses
       grantingIsOpen
       numberOfApprovedMembers
+      globalBurnVerified
       about
       membersLimit {
         consumedPercentage
