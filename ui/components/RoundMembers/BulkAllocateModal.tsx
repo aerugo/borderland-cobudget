@@ -324,7 +324,7 @@ const GlobalBurnForm = ({
           className="w-36 mx-auto mt-4 mb-2"
         />
         <p className="text-center mb-4 text-gray-700 text-sm">
-          <FormattedMessage defaultMessage="Only members on the active Global Burn list will receive funds." />
+          <FormattedMessage defaultMessage="Only members on the active members list will receive funds." />
         </p>
         <div className="flex space-x-3 justify-end">
           <Button onClick={handleClose} variant="secondary" type="button">
@@ -372,7 +372,7 @@ const BulkAllocateModal = ({
             />
             <Tab
               label={intl.formatMessage({
-                defaultMessage: "Global Burn members",
+                defaultMessage: "Confirmed Only",
               })}
             />
           </Tabs>
