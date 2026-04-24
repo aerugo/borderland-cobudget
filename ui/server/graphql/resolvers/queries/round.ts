@@ -20,6 +20,7 @@ import {
 } from "../../../../constants";
 import { getExchangeRates } from "../helpers/getExchangeRate";
 import { getOCToken } from "server/utils/roundUtils";
+import { getRoundResults } from "server/services/RoundResultsService";
 
 export const rounds = async (parent, { limit, groupSlug }, { user }) => {
   if (!groupSlug) return null;
@@ -180,6 +181,18 @@ export const roundTransactions = combineResolvers(
     };
   }
 );
+
+export const roundResults = async (
+  parent,
+  { roundId },
+  { user, ss }
+) => {
+  const round = await prisma.round.findUnique({ where: { id: roundId } });
+  if (!round) return null;
+  const allowed = ss || (await canViewRound({ round, user }));
+  if (!allowed) return null;
+  return getRoundResults(roundId);
+};
 
 export const members = combineResolvers(
   isCollMemberOrGroupAdmin,
