@@ -1,4 +1,5 @@
 import { Client, ServerClient } from "postmark";
+import { LinkTrackingOptions } from "postmark/dist/client/models";
 import prisma from "./prisma";
 export interface SendEmailInput {
   to: string;
@@ -92,6 +93,8 @@ const send = async (mail: SendEmailInput) => {
         Subject: mail.subject,
         TextBody: mail.text,
         HtmlBody: mail.html ? wrapHtml(mail.html) : undefined,
+        TrackOpens: false,
+        TrackLinks: LinkTrackingOptions.None,
       });
     } catch (err) {
       console.log(err);
@@ -127,6 +130,8 @@ const sendBatch = async (mails: SendEmailInput[]) => {
               Subject: mail.subject,
               TextBody: mail.text,
               HtmlBody: mail.html ? wrapHtml(mail.html) : undefined,
+              TrackOpens: false,
+              TrackLinks: LinkTrackingOptions.None,
             }))
           )
         )
