@@ -15,13 +15,19 @@ import { FormattedNumber } from "react-intl";
  * @returns { React.ReactElement }
  */
 
-function FormattedCurrency({ value, currency }) {
+function FormattedCurrency({ value, currency, maximumFractionDigits }: { value: number; currency: string; maximumFractionDigits?: number }) {
   return (
     <FormattedNumber
       value={value / 100}
       style="currency"
       currencyDisplay={"symbol"}
       currency={currency}
+      {...(maximumFractionDigits !== undefined
+        ? {
+            maximumFractionDigits,
+            minimumFractionDigits: maximumFractionDigits,
+          }
+        : {})}
     />
   );
 }

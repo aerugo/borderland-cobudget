@@ -123,6 +123,7 @@ const schema = gql`
       offset: Int
       limit: Int
     ): RoundTransactionPage
+    roundResults(roundId: ID!): RoundResults
     balances(groupSlug: String!): [RoundBalance]
 
     # FREUD
@@ -1021,6 +1022,32 @@ const schema = gql`
   type RoundTransactionPage {
     moreExist: Boolean
     transactions(roundId: ID!, offset: Int, limit: Int): [RoundTransaction]
+  }
+
+  type BucketResultRow {
+    id: ID!
+    title: String!
+    minGoal: Int!
+    maxGoal: Int!
+    contributionsCount: Int!
+    contributionsSum: Int!
+    contributorsCount: Int!
+    contributionsCountFundedOnly: Int!
+    contributionsSumFundedOnly: Int!
+  }
+
+  type RoundResults {
+    totalContributionsCount: Int!
+    totalContributionsAmount: Int!
+    averageContributionAmount: Float!
+    participationRate: Float!
+    fullParticipationRate: Float!
+    fundedParticipantCount: Int!
+    anySpendParticipantCount: Int!
+    fullySpentParticipantCount: Int!
+    buckets: [BucketResultRow!]!
+    computedAt: Date!
+    isStale: Boolean!
   }
 
   # type GrantingPeriod {

@@ -278,8 +278,21 @@ model Round {
   batchEmails     BatchEmail[]
   conversations   Conversation[]
 
+  resultsSnapshot RoundResultsSnapshot?
+
   @@unique([groupId, slug])
   @@map("Collection")
+}
+
+model RoundResultsSnapshot {
+  id            String   @id @default(cuid())
+  round         Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId       String   @unique @map("collectionId")
+  payload       Json
+  schemaVersion Int      @default(1)
+  computedAt    DateTime @default(now())
+
+  @@index([computedAt])
 }
 
 model Tag {
