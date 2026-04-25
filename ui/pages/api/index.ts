@@ -1,4 +1,5 @@
 import { ApolloServer } from "apollo-server-micro";
+import { json } from "micro";
 import cors from "cors";
 import prisma from "../../server/prisma";
 import schema from "../../server/graphql/schema";
@@ -74,6 +75,29 @@ export default handler()
     if (!apolloHandler) {
       res.status(500).json({ error: "Apollo Server not initialized" });
       return;
+    }
+
+    // Vercel's proxy intermittently forwards POST requests without a
+    // Content-Length header. apollo-server-micro@3 (microApollo.js)
+    // gates body parsing on `req.headers['content-length']`, so when
+    // that header is missing it skips the body, runHttpQuery sees no
+    // query, and returns a 400 with "POST body missing, invalid
+    // Content-Type, or JSON object has no keys.". Pre-parse the body
+    // ourselves and stash it on `req.filePayload`, which the same
+    // microApollo handler treats as a pre-supplied query (skipping
+    // its own content-length check entirely).
+    const reqAny = req as any;
+    if (
+      req.method === "POST" &&
+      !reqAny.filePayload &&
+      typeof req.headers["content-type"] === "string" &&
+      req.headers["content-type"].includes("application/json")
+    ) {
+      try {
+        reqAny.filePayload = await json(req);
+      } catch (_e) {
+        // Body was empty/malformed; let Apollo respond with its own error.
+      }
     }
 
     // Enable edge caching for anonymous GraphQL queries
