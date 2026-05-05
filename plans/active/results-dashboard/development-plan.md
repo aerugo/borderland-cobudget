@@ -336,5 +336,6 @@ reflects reality.
 | Phase 1 | Complete | 2026-04-24 | 2026-04-24 | Backend done; SQL verified against synthetic fixture; 8 unit tests passing. See [phases/phase-1.md](phases/phase-1.md) and work-notes for the legacy-column-name corrections. |
 | Phase 2 | Complete | 2026-04-25 | 2026-04-25 | Frontend skeleton: page, components, SubMenu swap. Confirmed in browser on Borderland Dreams 2026 — all four hero tiles show correct numbers. See [phases/phase-2.md](phases/phase-2.md). |
 | Phase 3 | Complete | 2026-04-25 | 2026-04-25 | Charts: recharts installed, 5 charts built, 13/13 tests pass, typecheck clean. Browser QA pending screenshot. See [phases/phase-3.md](phases/phase-3.md). |
-| Phase 4 | Pending | | | |
-| Phase 5 | Pending | | | |
+| Phase 4 | Planned | 2026-04-25 | | Fix participation metric for Borderland's multi-round funding cycles (current SQL uses net allocations, which cancel out under round-end resets). See [phases/phase-4.md](phases/phase-4.md). |
+| Phase 5 | Pending | | | Cache invalidation hooks on Contribution / Allocation mutations |
+| Phase 6 | Pending | | | Polish: empty/closed-round states, History → /transactions migration, i18n |

@@ -47,13 +47,19 @@ export async function runRoundResultsQuery(
       WHERE "collectionId" = ${roundId}
         AND ("deleted" IS NULL OR "deleted" = false)
     ),
-    member_budget AS (
-      SELECT rm_id, SUM(amount)::bigint AS budget
+    member_received AS (
+      -- Both ADD and SET allocations store the *delta* in amount.
+      -- Round-end "reset to zero" writes a negative delta, so SUM(amount)
+      -- understates how much a member has cumulatively received across
+      -- multi-cycle funding rounds. Sum only the positive deltas to get
+      -- gross cumulative grants.
+      SELECT rm_id,
+             COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0)::bigint AS received
       FROM all_allocations
       GROUP BY rm_id
     ),
     funded_members AS (
-      SELECT rm_id, budget FROM member_budget WHERE budget > 0
+      SELECT rm_id, received FROM member_received WHERE received > 0
     ),
     member_spend AS (
       SELECT rm_id, COALESCE(SUM(amount), 0)::bigint AS spent
@@ -103,7 +109,7 @@ export async function runRoundResultsQuery(
       (SELECT COUNT(*)::int
          FROM funded_members fm
          LEFT JOIN member_spend ms USING (rm_id)
-         WHERE COALESCE(ms.spent, 0) >= fm.budget) AS fully_spent_count,
+         WHERE COALESCE(ms.spent, 0) >= fm.received) AS fully_spent_count,
       COALESCE((SELECT json_agg(bucket_stats.* ORDER BY contributions_sum DESC) FROM bucket_stats), '[]'::json) AS buckets;
   `;
 
