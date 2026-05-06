@@ -1,4 +1,5 @@
 import { ApolloServer } from "apollo-server-micro";
+import { ApolloServerPluginLandingPageLocalDefault } from "apollo-server-core";
 import { json } from "micro";
 import cors from "cors";
 import prisma from "../../server/prisma";
@@ -33,9 +34,15 @@ const corsOptions = {
 
 subscribers.initialize(EventHub);
 
+const introspectionEnabled = process.env.GRAPHQL_INTROSPECTION === "true";
+
 const apolloServer = new ApolloServer({
   typeDefs: schema,
   resolvers,
+  introspection: introspectionEnabled,
+  plugins: introspectionEnabled
+    ? [ApolloServerPluginLandingPageLocalDefault({ embed: true })]
+    : [],
   context: async ({ req, res }): Promise<GraphQLContext> => {
     const { user } = req;
     // 'ss' is SuperAdminSession
