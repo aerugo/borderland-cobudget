@@ -2,7 +2,7 @@ import prisma from "../../prisma";
 import { runRoundResultsQuery } from "./sql";
 import { RoundResultsPayload, RoundResultsResponse } from "./types";
 
-export const ROUND_RESULTS_SCHEMA_VERSION = 3;
+export const ROUND_RESULTS_SCHEMA_VERSION = 4;
 const TTL_MS = 60 * 60 * 1000;
 
 export async function computeRoundResults(

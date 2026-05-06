@@ -17,6 +17,8 @@ type Props = {
   bins: Bin[];
   color?: string;
   ariaLabel: string;
+  unit?: string;
+  yLabel?: string;
 };
 
 const DistributionChart: React.FC<Props> = ({
@@ -26,9 +28,11 @@ const DistributionChart: React.FC<Props> = ({
   bins,
   color = "#ef4444",
   ariaLabel,
+  unit = "dreams",
+  yLabel = "Dream count",
 }) => {
   const data = bins.map((b) => ({ label: b.label, count: b.count }));
-  const totalDreams = bins.reduce((s, b) => s + b.count, 0);
+  const total = bins.reduce((s, b) => s + b.count, 0);
 
   return (
     <div className="bg-white rounded shadow p-5">
@@ -60,7 +64,7 @@ const DistributionChart: React.FC<Props> = ({
             <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
             <Tooltip
               cursor={{ fill: "rgba(0,0,0,0.04)" }}
-              formatter={(value: number) => [`${value} dreams`, ""]}
+              formatter={(value: number) => [`${value} ${unit}`, ""]}
             />
             <Bar dataKey="count" fill={color} radius={[3, 3, 0, 0]} />
           </BarChart>
@@ -71,7 +75,7 @@ const DistributionChart: React.FC<Props> = ({
         <thead>
           <tr>
             <th>{xLabel}</th>
-            <th>Dream count</th>
+            <th>{yLabel}</th>
           </tr>
         </thead>
         <tbody>
@@ -83,7 +87,7 @@ const DistributionChart: React.FC<Props> = ({
           ))}
           <tr>
             <td>Total</td>
-            <td>{totalDreams}</td>
+            <td>{total}</td>
           </tr>
         </tbody>
       </table>

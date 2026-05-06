@@ -20,6 +20,7 @@ export type RoundResultsPayload = {
   anySpendParticipantCount: number;
   fullySpentParticipantCount: number;
   buckets: BucketResultRow[];
+  dreamsFundedPerContributor: number[];
 };
 
 export type RoundResultsResponse = RoundResultsPayload & {

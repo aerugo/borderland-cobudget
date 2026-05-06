@@ -19,6 +19,7 @@ type RawRow = {
   any_spend_count: string | number;
   fully_spent_count: string | number;
   buckets: RawBucketRow[] | null;
+  dreams_funded_per_contributor: (string | number)[] | null;
 };
 
 const toNum = (v: string | number | null | undefined): number => {
@@ -94,6 +95,12 @@ export async function runRoundResultsQuery(
         AND b."canceledAt" IS NULL
       GROUP BY b.id, b.title, bg.min_goal, bg.max_goal
     ),
+    contributor_dream_counts AS (
+      SELECT rm_id, COUNT(DISTINCT "bucketId")::int AS dream_count
+      FROM all_contributions
+      WHERE amount > 0
+      GROUP BY rm_id
+    ),
     totals AS (
       SELECT COUNT(*)::int AS total_contrib_count,
              COALESCE(SUM(amount), 0)::bigint AS total_contrib_amount
@@ -110,7 +117,8 @@ export async function runRoundResultsQuery(
          FROM funded_members fm
          LEFT JOIN member_spend ms USING (rm_id)
          WHERE COALESCE(ms.spent, 0) >= fm.received) AS fully_spent_count,
-      COALESCE((SELECT json_agg(bucket_stats.* ORDER BY contributions_sum DESC) FROM bucket_stats), '[]'::json) AS buckets;
+      COALESCE((SELECT json_agg(bucket_stats.* ORDER BY contributions_sum DESC) FROM bucket_stats), '[]'::json) AS buckets,
+      COALESCE((SELECT json_agg(dream_count) FROM contributor_dream_counts), '[]'::json) AS dreams_funded_per_contributor;
   `;
 
   const row = rows[0];
@@ -131,6 +139,10 @@ export async function runRoundResultsQuery(
     contributionsCountFundedOnly: toNum(b.contributions_count_funded),
     contributionsSumFundedOnly: toNum(b.contributions_sum_funded),
   }));
+
+  const dreamsFundedPerContributor: number[] = (
+    row.dreams_funded_per_contributor ?? []
+  ).map(toNum);
 
   const averageContributionAmount =
     totalContributionsCount > 0
@@ -157,5 +169,6 @@ export async function runRoundResultsQuery(
     anySpendParticipantCount,
     fullySpentParticipantCount,
     buckets,
+    dreamsFundedPerContributor,
   };
 }

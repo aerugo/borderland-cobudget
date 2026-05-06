@@ -1046,6 +1046,7 @@ const schema = gql`
     anySpendParticipantCount: Int!
     fullySpentParticipantCount: Int!
     buckets: [BucketResultRow!]!
+    dreamsFundedPerContributor: [Int!]!
     computedAt: Date!
     isStale: Boolean!
   }

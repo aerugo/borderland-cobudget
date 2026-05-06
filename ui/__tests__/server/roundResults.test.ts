@@ -28,6 +28,7 @@ const emptyRawRow = {
   any_spend_count: 0,
   fully_spent_count: 0,
   buckets: [],
+  dreams_funded_per_contributor: [],
 };
 
 const fullRawRow = {
@@ -35,6 +36,7 @@ const fullRawRow = {
   funded_member_count: 4,
   any_spend_count: 4,
   fully_spent_count: 3,
+  dreams_funded_per_contributor: [3, "2", 1, 1],
   buckets: [
     {
       id: "b1",
@@ -80,6 +82,7 @@ describe("RoundResultsService", () => {
         anySpendParticipantCount: 0,
         fullySpentParticipantCount: 0,
         buckets: [],
+        dreamsFundedPerContributor: [],
       });
     });
 
@@ -94,6 +97,7 @@ describe("RoundResultsService", () => {
       expect(payload.participationRate).toBeCloseTo(1);
       expect(payload.fullySpentParticipantCount).toBe(3);
       expect(payload.fullParticipationRate).toBeCloseTo(0.75);
+      expect(payload.dreamsFundedPerContributor).toEqual([3, 2, 1, 1]);
       expect(payload.buckets).toHaveLength(2);
       expect(payload.buckets[0]).toEqual({
         id: "b1",
@@ -110,10 +114,11 @@ describe("RoundResultsService", () => {
 
     it("treats null buckets array from json_agg as empty", async () => {
       mockPrisma.$queryRaw.mockResolvedValue([
-        { ...emptyRawRow, buckets: null },
+        { ...emptyRawRow, buckets: null, dreams_funded_per_contributor: null },
       ]);
       const payload = await computeRoundResults(ROUND_ID);
       expect(payload.buckets).toEqual([]);
+      expect(payload.dreamsFundedPerContributor).toEqual([]);
     });
   });
 

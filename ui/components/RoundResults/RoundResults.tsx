@@ -32,6 +32,7 @@ export const ROUND_RESULTS_QUERY = gql`
         contributionsCountFundedOnly
         contributionsSumFundedOnly
       }
+      dreamsFundedPerContributor
       computedAt
       isStale
     }
@@ -66,6 +67,11 @@ const RoundResults: React.FC<Props> = ({ round }) => {
     () => buildIntegerBins(fundedBuckets.map((b: any) => b.contributorsCount)),
     [fundedBuckets]
   );
+  const dreamsPerContributorBins = useMemo(
+    () => buildIntegerBins(results?.dreamsFundedPerContributor ?? []),
+    [results]
+  );
+  const contributorCount = (results?.dreamsFundedPerContributor ?? []).length;
 
   if (fetching && !data) {
     return (
@@ -239,6 +245,32 @@ const RoundResults: React.FC<Props> = ({ round }) => {
           buckets={results.buckets}
           currency={round.currency}
           ariaLabel="Per-dream scatter of contribution count against total raised, restricted to contributions from funded participants"
+        />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-900">
+          <FormattedMessage defaultMessage="Participant reach" />
+        </h2>
+        <p className="text-sm text-gray-500 -mt-2">
+          <FormattedMessage
+            defaultMessage="Distribution across the {count} participants who funded at least one dream."
+            values={{ count: contributorCount }}
+          />
+        </p>
+        <DistributionChart
+          title={
+            <FormattedMessage defaultMessage="Dreams funded per participant" />
+          }
+          description={
+            <FormattedMessage defaultMessage="How many distinct dreams each contributing participant supported." />
+          }
+          xLabel="Distinct dreams funded"
+          bins={dreamsPerContributorBins}
+          color="#0ea5e9"
+          unit="participants"
+          yLabel="Participant count"
+          ariaLabel="Distribution of contributing participants by number of distinct dreams funded"
         />
       </section>
 
