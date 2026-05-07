@@ -13,22 +13,35 @@ export type SortMethod = "combo" | "funders" | "sek" | "percent";
 
 export interface RedistributionStep {
   defundedBucketId: string | null;
-  fundedBucketId: string | null;
-  amountMoved: number;
+  fundedBucketIds: string[];
+  amountReturnedToPot: number;
+  amountFunded: number;
   pot: number;
 }
 
 export interface RedistributionState {
   method: SortMethod;
-  /** Current funded amount per bucket */
+  /** Allocation per bucket as the algorithm sees it */
   amounts: Record<string, number>;
-  /** Sorted bucket IDs (top = highest priority) */
+  /** Eligible bucket IDs (underfunded, non-skip), sorted by method (top = highest priority) */
   sortedIds: string[];
-  currentStep: number;
-  steps: RedistributionStep[];
+  /** Buckets funded by this run, in priority order */
+  fundedByRun: string[];
+  /** Index into sortedIds: next dream the algorithm will try to fund */
+  frontierIndex: number;
+  /** Money still available to allocate */
   pot: number;
+  /** Round budget used to seed pot */
+  totalBudget: number;
+  /** Sum of allocations on dreams not eligible for redistribution (already at goal, lock, manual) */
+  lockedAllocated: number;
+  /** Step history */
+  steps: RedistributionStep[];
+  /** True when no further runStep can change the state */
   isComplete: boolean;
+  /** Number of dreams whose `amounts` >= goal */
   totalFunded: number;
+  /** Sum of `amounts` */
   totalContributed: number;
 }
 
@@ -36,10 +49,7 @@ function tieBreak(a: FreudDream, b: FreudDream): number {
   return a.title.localeCompare(b.title);
 }
 
-function sortByMethod(
-  dreams: FreudDream[],
-  method: SortMethod
-): FreudDream[] {
+function sortByMethod(dreams: FreudDream[], method: SortMethod): FreudDream[] {
   const sorted = [...dreams];
   switch (method) {
     case "funders":
@@ -47,15 +57,14 @@ function sortByMethod(
       break;
     case "sek":
       sorted.sort(
-        (a, b) =>
-          (a.goal - a.funded) - (b.goal - b.funded) || tieBreak(a, b)
+        (a, b) => a.goal - a.funded - (b.goal - b.funded) || tieBreak(a, b)
       );
       break;
     case "percent":
       sorted.sort(
         (a, b) =>
           (b.goal > 0 ? b.funded / b.goal : 0) -
-          (a.goal > 0 ? a.funded / a.goal : 0) || tieBreak(a, b)
+            (a.goal > 0 ? a.funded / a.goal : 0) || tieBreak(a, b)
       );
       break;
     case "combo":
@@ -74,13 +83,12 @@ function comboRank(dream: FreudDream, allDreams: FreudDream[]): number {
     (a, b) => b.funders - a.funders || tieBreak(a, b)
   );
   const bySek = [...allDreams].sort(
-    (a, b) =>
-      (a.goal - a.funded) - (b.goal - b.funded) || tieBreak(a, b)
+    (a, b) => a.goal - a.funded - (b.goal - b.funded) || tieBreak(a, b)
   );
   const byPercent = [...allDreams].sort(
     (a, b) =>
       (b.goal > 0 ? b.funded / b.goal : 0) -
-      (a.goal > 0 ? a.funded / a.goal : 0) || tieBreak(a, b)
+        (a.goal > 0 ? a.funded / a.goal : 0) || tieBreak(a, b)
   );
 
   const fRank = byFunders.findIndex((d) => d.id === dream.id) + 1;
@@ -97,57 +105,140 @@ function computeSummary(
   let totalContributed = 0;
   for (const id of Object.keys(amounts)) {
     totalContributed += amounts[id];
-    if (amounts[id] >= goals[id]) totalFunded++;
+    if (goals[id] > 0 && amounts[id] >= goals[id]) totalFunded++;
   }
   return { totalFunded, totalContributed };
 }
 
+function computeIsComplete(
+  frontierIndex: number,
+  sortedIds: string[],
+  amounts: Record<string, number>,
+  fundedByRun: string[],
+  pot: number,
+  goals: Record<string, number>
+): boolean {
+  if (frontierIndex >= sortedIds.length) return true;
+  const frontierId = sortedIds[frontierIndex];
+  const need = goals[frontierId] - amounts[frontierId];
+  const totalDefundable = fundedByRun.reduce((s, id) => s + amounts[id], 0);
+  return pot + totalDefundable < need;
+}
+
 export function initRedistribution(
   dreams: FreudDream[],
-  method: SortMethod
+  method: SortMethod,
+  totalBudget: number
 ): RedistributionState {
-  // Filter to underfunded dreams, excluding skipped
-  const eligible = dreams.filter(
-    (d) => d.goal > 0 && d.funded < d.goal && d.override !== "skip"
-  );
-
   const amounts: Record<string, number> = {};
   const goals: Record<string, number> = {};
+  const eligible: FreudDream[] = [];
+  let lockedAllocated = 0;
 
-  for (const d of eligible) {
+  for (const d of dreams) {
+    goals[d.id] = d.goal;
+
+    if (d.goal > 0 && d.funded >= d.goal) {
+      amounts[d.id] = d.funded;
+      lockedAllocated += d.funded;
+      continue;
+    }
+
     if (d.override === "lock") {
       amounts[d.id] = d.goal;
-    } else if (d.override === "manual" && d.manualAmount !== undefined) {
-      amounts[d.id] = d.manualAmount;
-    } else {
-      amounts[d.id] = d.funded;
+      lockedAllocated += d.goal;
+      continue;
     }
-    goals[d.id] = d.goal;
+
+    if (d.override === "manual") {
+      const amt = d.manualAmount ?? 0;
+      amounts[d.id] = amt;
+      lockedAllocated += amt;
+      continue;
+    }
+
+    if (d.override === "skip") {
+      amounts[d.id] = 0;
+      continue;
+    }
+
+    if (d.goal <= 0) {
+      amounts[d.id] = d.funded;
+      continue;
+    }
+
+    amounts[d.id] = 0;
+    eligible.push(d);
   }
 
-  // Also include already-funded dreams for total count
-  for (const d of dreams) {
-    if (!amounts.hasOwnProperty(d.id)) {
-      amounts[d.id] = d.funded;
-      goals[d.id] = d.goal;
-    }
-  }
-
-  const sorted = sortByMethod(eligible, method);
-  const sortedIds = sorted.map((d) => d.id);
+  const pot = Math.max(0, totalBudget - lockedAllocated);
+  const sortedIds = sortByMethod(eligible, method).map((d) => d.id);
 
   const summary = computeSummary(amounts, goals);
+
+  const isComplete = computeIsComplete(
+    0,
+    sortedIds,
+    amounts,
+    [],
+    pot,
+    goals
+  );
 
   return {
     method,
     amounts,
     sortedIds,
-    currentStep: 0,
+    fundedByRun: [],
+    frontierIndex: 0,
+    pot,
+    totalBudget,
+    lockedAllocated,
     steps: [],
-    pot: 0,
-    isComplete: sortedIds.length <= 1,
+    isComplete,
     ...summary,
   };
+}
+
+/**
+ * Walk sortedIds from `frontierIndex` onward, funding each dream whose remaining need
+ * fits in the running pot. Stops at the first dream that doesn't fit.
+ */
+function fundForward(
+  sortedIds: string[],
+  startIndex: number,
+  amounts: Record<string, number>,
+  fundedByRun: string[],
+  pot: number,
+  goals: Record<string, number>
+): {
+  amounts: Record<string, number>;
+  fundedByRun: string[];
+  pot: number;
+  newlyFunded: string[];
+  frontierIndex: number;
+} {
+  const newlyFunded: string[] = [];
+  let frontierIndex = startIndex;
+  while (frontierIndex < sortedIds.length) {
+    const id = sortedIds[frontierIndex];
+    const need = goals[id] - amounts[id];
+    if (need <= 0) {
+      // already funded by some override path — advance
+      frontierIndex++;
+      continue;
+    }
+    if (pot >= need) {
+      amounts[id] = goals[id];
+      pot -= need;
+      fundedByRun.push(id);
+      newlyFunded.push(id);
+      frontierIndex++;
+    } else {
+      break;
+    }
+  }
+  return { amounts, fundedByRun, pot, newlyFunded, frontierIndex };
 }
 
 export function stepRedistribution(
@@ -157,48 +248,66 @@ export function stepRedistribution(
   if (state.isComplete) return state;
 
   const amounts = { ...state.amounts };
+  let fundedByRun = [...state.fundedByRun];
   let pot = state.pot;
-  const remaining = state.sortedIds.filter(
-    (id) => amounts[id] < goals[id] && amounts[id] > 0
-  );
+  let frontierIndex = state.frontierIndex;
 
-  if (remaining.length <= 1) {
-    return { ...state, isComplete: true };
+  let defundedId: string | null = null;
+  let amountReturnedToPot = 0;
+  const isFirstRun = state.steps.length === 0 && fundedByRun.length === 0;
+
+  if (!isFirstRun) {
+    if (fundedByRun.length === 0) {
+      // No fundedByRun to defund and not first run: nothing to do.
+      return { ...state, isComplete: true };
+    }
+    defundedId = fundedByRun[fundedByRun.length - 1];
+    amountReturnedToPot = amounts[defundedId];
+    amounts[defundedId] = 0;
+    pot += amountReturnedToPot;
+    fundedByRun = fundedByRun.slice(0, -1);
+    // frontierIndex stays where it is — we're retrying that frontier dream
   }
 
-  // Defund the bottom dream
-  const bottomId = remaining[remaining.length - 1];
-  const defundAmount = amounts[bottomId];
-  pot += defundAmount;
-  amounts[bottomId] = 0;
+  const result = fundForward(
+    state.sortedIds,
+    frontierIndex,
+    amounts,
+    fundedByRun,
+    pot,
+    goals
+  );
+  fundedByRun = result.fundedByRun;
+  pot = result.pot;
+  frontierIndex = result.frontierIndex;
 
-  // Fund the top dream
-  const topId = remaining[0];
-  const needed = goals[topId] - amounts[topId];
-  const toAdd = Math.min(needed, pot);
-  amounts[topId] += toAdd;
-  pot -= toAdd;
-
+  const summary = computeSummary(amounts, goals);
   const step: RedistributionStep = {
-    defundedBucketId: bottomId,
-    fundedBucketId: topId,
-    amountMoved: toAdd,
+    defundedBucketId: defundedId,
+    fundedBucketIds: result.newlyFunded,
+    amountReturnedToPot,
+    amountFunded: result.newlyFunded.reduce(
+      (s, id) => s + (amounts[id] - (state.amounts[id] ?? 0)),
+      0
+    ),
     pot,
   };
 
-  // Check if we should continue
-  const newRemaining = state.sortedIds.filter(
-    (id) => amounts[id] < goals[id] && amounts[id] > 0
+  const isComplete = computeIsComplete(
+    frontierIndex,
+    state.sortedIds,
+    amounts,
+    fundedByRun,
+    pot,
+    goals
   );
-  const isComplete = newRemaining.length <= 1;
-
-  const summary = computeSummary(amounts, goals);
 
   return {
     ...state,
     amounts,
+    fundedByRun,
+    frontierIndex,
     pot,
-    currentStep: state.currentStep + 1,
     steps: [...state.steps, step],
     isComplete,
     ...summary,
@@ -211,29 +320,54 @@ export function finishRedistribution(
 ): RedistributionState {
   let current = state;
   let iterations = 0;
-  const maxIterations = Object.keys(goals).length * 2;
+  const maxIterations = state.sortedIds.length * 2 + 2;
   while (!current.isComplete && iterations < maxIterations) {
-    current = stepRedistribution(current, goals);
+    const next = stepRedistribution(current, goals);
+    if (next === current) break;
+    current = next;
     iterations++;
   }
-  return { ...current, isComplete: true };
+  return current;
 }
 
+export function getNextBuckets(
+  state: RedistributionState,
+  goals: Record<string, number>
+): {
+  nextToFund: string | null;
+  nextToDefund: string | null;
+} {
+  if (state.isComplete) {
+    return { nextToFund: null, nextToDefund: null };
+  }
+  const nextToFund =
+    state.frontierIndex < state.sortedIds.length
+      ? state.sortedIds[state.frontierIndex]
+      : null;
+  const nextToDefund =
+    state.fundedByRun.length > 0
+      ? state.fundedByRun[state.fundedByRun.length - 1]
+      : null;
+  return { nextToFund, nextToDefund };
+}
+
+/**
+ * @deprecated Use getNextBuckets instead. Kept for source compatibility.
+ */
 export function getNextBucket(
   state: RedistributionState,
   goals: Record<string, number>
 ): { bucketId: string; action: "defund" | "fund" } | null {
-  if (state.isComplete) return null;
-  const remaining = state.sortedIds.filter(
-    (id) => state.amounts[id] < goals[id] && state.amounts[id] > 0
-  );
-  if (remaining.length <= 1) return null;
-  return { bucketId: remaining[remaining.length - 1], action: "defund" };
+  const { nextToFund, nextToDefund } = getNextBuckets(state, goals);
+  if (nextToDefund) return { bucketId: nextToDefund, action: "defund" };
+  if (nextToFund) return { bucketId: nextToFund, action: "fund" };
+  return null;
 }
 
 export function resetRedistribution(
   dreams: FreudDream[],
-  method: SortMethod
+  method: SortMethod,
+  totalBudget: number
 ): RedistributionState {
-  return initRedistribution(dreams, method);
+  return initRedistribution(dreams, method, totalBudget);
 }

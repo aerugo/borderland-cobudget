@@ -6,7 +6,7 @@ import {
   initRedistribution,
   stepRedistribution,
   finishRedistribution,
-  getNextBucket,
+  getNextBuckets,
 } from "utils/freud-redistribution";
 import { FormattedNumber } from "react-intl";
 
@@ -16,6 +16,7 @@ interface ModelControlRowProps {
   description: string;
   dreams: FreudDream[];
   goals: Record<string, number>;
+  totalBudget: number;
   onResult: (method: SortMethod, state: RedistributionState | null) => void;
 }
 
@@ -25,45 +26,42 @@ export default function ModelControlRow({
   description,
   dreams,
   goals,
+  totalBudget,
   onResult,
 }: ModelControlRowProps) {
   const [state, setState] = useState<RedistributionState | null>(null);
   const [loopMode, setLoopMode] = useState(false);
 
   const handleRun = useCallback(() => {
-    if (!state) {
-      const initial = initRedistribution(dreams, method);
-      if (loopMode) {
-        const stepped = stepRedistribution(initial, goals);
-        setState(stepped);
-        onResult(method, stepped);
-      } else {
-        const finished = finishRedistribution(initial, goals);
-        setState(finished);
-        onResult(method, finished);
-      }
-    } else if (state.isComplete) {
-      return;
-    } else if (loopMode) {
-      const stepped = stepRedistribution(state, goals);
-      setState(stepped);
-      onResult(method, stepped);
-    } else {
-      const finished = finishRedistribution(state, goals);
-      setState(finished);
-      onResult(method, finished);
-    }
-  }, [state, dreams, method, loopMode, goals, onResult]);
+    const current = state ?? initRedistribution(dreams, method, totalBudget);
+    if (current.isComplete) return;
+    const next = loopMode
+      ? finishRedistribution(current, goals)
+      : stepRedistribution(current, goals);
+    setState(next);
+    onResult(method, next);
+  }, [state, dreams, method, loopMode, goals, totalBudget, onResult]);
 
   const handleReset = useCallback(() => {
     setState(null);
     onResult(method, null);
   }, [method, onResult]);
 
-  const nextBucket = state ? getNextBucket(state, goals) : null;
-  const nextDream = nextBucket
-    ? dreams.find((d) => d.id === nextBucket.bucketId)
+  const next = state ? getNextBuckets(state, goals) : null;
+  const nextFundDream = next?.nextToFund
+    ? dreams.find((d) => d.id === next.nextToFund)
     : null;
+  const nextDefundDream = next?.nextToDefund
+    ? dreams.find((d) => d.id === next.nextToDefund)
+    : null;
+
+  const buttonLabel = !state
+    ? "Run"
+    : state.isComplete
+    ? "Done"
+    : loopMode
+    ? "Run all"
+    : "Run";
 
   return (
     <tr className="border-b">
@@ -84,13 +82,7 @@ export default function ModelControlRow({
           disabled={state?.isComplete}
           className="bg-blue-600 text-white rounded px-3 py-0.5 text-xs disabled:opacity-50 hover:bg-blue-700"
         >
-          {!state
-            ? "Run"
-            : state.isComplete
-            ? "Done"
-            : loopMode
-            ? "Step"
-            : "Finish run"}
+          {buttonLabel}
         </button>
       </td>
       <td className="px-3 py-2">
@@ -104,8 +96,15 @@ export default function ModelControlRow({
           Loop
         </label>
       </td>
-      <td className="px-3 py-2 text-xs text-gray-500 max-w-[120px] truncate">
-        {nextDream?.title ?? "—"}
+      <td className="px-3 py-2 text-xs text-gray-500 max-w-[160px]">
+        <div className="truncate" title={nextFundDream?.title ?? ""}>
+          <span className="text-green-600">+</span>{" "}
+          {nextFundDream?.title ?? "—"}
+        </div>
+        <div className="truncate" title={nextDefundDream?.title ?? ""}>
+          <span className="text-red-500">−</span>{" "}
+          {nextDefundDream?.title ?? "—"}
+        </div>
       </td>
       <td className="px-3 py-2 text-xs text-right">
         {state?.totalFunded ?? "—"}

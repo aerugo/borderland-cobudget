@@ -4,7 +4,7 @@ import {
   initRedistribution,
   stepRedistribution,
   finishRedistribution,
-  getNextBucket,
+  getNextBuckets,
 } from "../utils/freud-redistribution";
 
 function makeDream(
@@ -15,7 +15,16 @@ function makeDream(
   override?: FreudDream["override"],
   manualAmount?: number
 ): FreudDream {
-  return { id, title: `Dream ${id}`, goal, stretch: goal, funded, funders, override, manualAmount };
+  return {
+    id,
+    title: `Dream ${id}`,
+    goal,
+    stretch: goal,
+    funded,
+    funders,
+    override,
+    manualAmount,
+  };
 }
 
 function goalsFromDreams(dreams: FreudDream[]): Record<string, number> {
@@ -26,140 +35,209 @@ function goalsFromDreams(dreams: FreudDream[]): Record<string, number> {
 
 describe("freud-redistribution", () => {
   describe("initRedistribution", () => {
-    it("excludes fully funded dreams", () => {
+    it("seeds pot from totalBudget minus already-funded dreams", () => {
       const dreams = [
-        makeDream("a", 100, 100, 5),
-        makeDream("b", 100, 50, 3),
+        makeDream("done", 100, 100, 5), // fully funded → locked at 100
+        makeDream("a", 50, 0, 3),
+        makeDream("b", 50, 0, 2),
       ];
-      const state = initRedistribution(dreams, "funders");
-      // Only "b" should be in sorted list (underfunded)
-      expect(state.sortedIds).toEqual(["b"]);
+      const state = initRedistribution(dreams, "funders", 250);
+      expect(state.lockedAllocated).toBe(100);
+      expect(state.pot).toBe(150);
+      expect(state.sortedIds).toEqual(["a", "b"]);
+      // Eligible dreams reset to 0 — algorithm distributes fresh
+      expect(state.amounts["a"]).toBe(0);
+      expect(state.amounts["b"]).toBe(0);
+      expect(state.amounts["done"]).toBe(100);
+      expect(state.fundedByRun).toEqual([]);
     });
 
-    it("excludes dreams with skip override", () => {
+    it("excludes dreams with skip override from sortedIds", () => {
       const dreams = [
         makeDream("a", 100, 50, 5, "skip"),
-        makeDream("b", 100, 50, 3),
+        makeDream("b", 100, 0, 3),
       ];
-      const state = initRedistribution(dreams, "funders");
+      const state = initRedistribution(dreams, "funders", 200);
+      expect(state.sortedIds).toEqual(["b"]);
+      // Skip is not counted toward lockedAllocated
+      expect(state.lockedAllocated).toBe(0);
+    });
+
+    it("locks 'lock' override at goal and counts toward lockedAllocated", () => {
+      const dreams = [
+        makeDream("a", 100, 50, 5, "lock"),
+        makeDream("b", 100, 0, 3),
+      ];
+      const state = initRedistribution(dreams, "funders", 250);
+      expect(state.amounts["a"]).toBe(100);
+      expect(state.lockedAllocated).toBe(100);
+      expect(state.pot).toBe(150);
       expect(state.sortedIds).toEqual(["b"]);
     });
 
-    it("handles lock override by setting funded to goal", () => {
-      const dreams = [
-        makeDream("a", 100, 50, 5, "lock"),
-        makeDream("b", 100, 50, 3),
-      ];
-      const state = initRedistribution(dreams, "funders");
-      expect(state.amounts["a"]).toBe(100); // locked at goal
-    });
-
-    it("handles manual override", () => {
+    it("respects manual override and counts toward lockedAllocated", () => {
       const dreams = [
         makeDream("a", 100, 50, 5, "manual", 75),
-        makeDream("b", 100, 50, 3),
+        makeDream("b", 100, 0, 3),
       ];
-      const state = initRedistribution(dreams, "funders");
+      const state = initRedistribution(dreams, "funders", 250);
       expect(state.amounts["a"]).toBe(75);
+      expect(state.lockedAllocated).toBe(75);
+      expect(state.pot).toBe(175);
+      expect(state.sortedIds).toEqual(["b"]);
     });
 
-    it("handles empty input", () => {
-      const state = initRedistribution([], "combo");
+    it("marks complete when nothing eligible", () => {
+      const state = initRedistribution([], "combo", 100);
       expect(state.isComplete).toBe(true);
       expect(state.sortedIds).toEqual([]);
     });
 
-    it("handles single underfunded dream", () => {
-      const dreams = [makeDream("a", 100, 50, 5)];
-      const state = initRedistribution(dreams, "funders");
-      expect(state.isComplete).toBe(true); // nothing to redistribute with 1 dream
+    it("marks complete when pot can't fund cheapest eligible dream", () => {
+      const dreams = [makeDream("a", 1000, 0, 5)];
+      const state = initRedistribution(dreams, "funders", 100);
+      expect(state.isComplete).toBe(true);
+    });
+
+    it("clamps pot to 0 if locked allocations exceed totalBudget", () => {
+      const dreams = [makeDream("done", 1000, 1000, 5)];
+      const state = initRedistribution(dreams, "funders", 500);
+      expect(state.pot).toBe(0);
     });
   });
 
   describe("sorting methods", () => {
     const dreams = [
-      makeDream("a", 1000, 200, 10), // 20%, missing 800
-      makeDream("b", 500, 400, 5),   // 80%, missing 100
-      makeDream("c", 2000, 600, 20), // 30%, missing 1400
+      makeDream("a", 1000, 200, 10),
+      makeDream("b", 500, 400, 5),
+      makeDream("c", 2000, 600, 20),
     ];
 
     it("funders: sorts by funder count descending", () => {
-      const state = initRedistribution(dreams, "funders");
-      // c=20 funders first, a=10 second, b=5 last
+      const state = initRedistribution(dreams, "funders", 10000);
       expect(state.sortedIds).toEqual(["c", "a", "b"]);
     });
 
     it("sek: sorts by missing amount ascending", () => {
-      const state = initRedistribution(dreams, "sek");
-      // b=100 missing first, a=800 second, c=1400 last
+      const state = initRedistribution(dreams, "sek", 10000);
       expect(state.sortedIds).toEqual(["b", "a", "c"]);
     });
 
     it("percent: sorts by percent funded descending", () => {
-      const state = initRedistribution(dreams, "percent");
-      // b=80% first, c=30% second, a=20% last
+      const state = initRedistribution(dreams, "percent", 10000);
       expect(state.sortedIds).toEqual(["b", "c", "a"]);
     });
 
     it("combo: sorts by aggregated rank", () => {
-      const state = initRedistribution(dreams, "combo");
-      // b: funders=3, sek=1, percent=1 → rank 5
-      // c: funders=1, sek=3, percent=2 → rank 6
-      // a: funders=2, sek=2, percent=3 → rank 7
+      const state = initRedistribution(dreams, "combo", 10000);
       expect(state.sortedIds).toEqual(["b", "c", "a"]);
     });
   });
 
-  describe("stepRedistribution", () => {
-    it("defunds bottom dream and funds top dream", () => {
+  describe("stepRedistribution: first run after reset", () => {
+    it("walks sortedIds funding each dream to goal until pot can't cover next", () => {
       const dreams = [
-        makeDream("top", 100, 80, 10),    // needs 20 more
-        makeDream("bottom", 100, 30, 2),  // will be defunded
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
+        makeDream("c", 100, 0, 5),
       ];
       const goals = goalsFromDreams(dreams);
-      let state = initRedistribution(dreams, "funders");
+      let state = initRedistribution(dreams, "funders", 250);
+      // pot = 250, can fund a (100) + b (100), can't cover c (100), pot = 50
       state = stepRedistribution(state, goals);
-
-      expect(state.amounts["bottom"]).toBe(0);  // defunded
-      expect(state.amounts["top"]).toBe(100);    // fully funded (80 + 20 from pot, pot had 30)
-      expect(state.pot).toBe(10);                // 30 - 20 = 10 remaining
+      expect(state.amounts["a"]).toBe(100);
+      expect(state.amounts["b"]).toBe(100);
+      expect(state.amounts["c"]).toBe(0);
+      expect(state.pot).toBe(50);
+      expect(state.fundedByRun).toEqual(["a", "b"]);
     });
 
-    it("marks complete when only one dream remains", () => {
+    it("funds nothing if pot can't cover top dream", () => {
+      const dreams = [makeDream("a", 1000, 0, 10)];
+      const goals = goalsFromDreams(dreams);
+      let state = initRedistribution(dreams, "funders", 500);
+      // initRedistribution should already mark complete
+      expect(state.isComplete).toBe(true);
+      // Stepping a complete state is a no-op
+      const stepped = stepRedistribution(state, goals);
+      expect(stepped.amounts["a"]).toBe(0);
+    });
+  });
+
+  describe("stepRedistribution: subsequent runs defund last-funded and refill", () => {
+    it("defunds last-funded dream, returns money to pot, attempts to fund next", () => {
       const dreams = [
-        makeDream("a", 100, 80, 10),
-        makeDream("b", 100, 30, 2),
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
+        makeDream("c", 60, 0, 5), // cheaper than b, but lower priority
       ];
       const goals = goalsFromDreams(dreams);
-      let state = initRedistribution(dreams, "funders");
+      let state = initRedistribution(dreams, "funders", 200);
+      // First run: pot=200 funds a(100), b(100). pot=0. fundedByRun=[a,b]. c unfunded.
       state = stepRedistribution(state, goals);
+      expect(state.fundedByRun).toEqual(["a", "b"]);
+      expect(state.pot).toBe(0);
+
+      // Second run: defund b(100) → pot=100. c needs 60 → funds c. pot=40. fundedByRun=[a,c]
+      state = stepRedistribution(state, goals);
+      expect(state.amounts["b"]).toBe(0);
+      expect(state.amounts["c"]).toBe(60);
+      expect(state.fundedByRun).toEqual(["a", "c"]);
+      expect(state.pot).toBe(40);
+    });
+
+    it("becomes complete when defunding can't open a fundable slot", () => {
+      const dreams = [
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 1000, 0, 8), // way too expensive
+      ];
+      const goals = goalsFromDreams(dreams);
+      let state = initRedistribution(dreams, "funders", 150);
+      // First run: pot=150 funds a(100). pot=50. b can't be funded (needs 1000).
+      state = stepRedistribution(state, goals);
+      expect(state.fundedByRun).toEqual(["a"]);
+      // Defunding a (returns 100) → pot=150 still can't cover b's 1000.
+      expect(state.isComplete).toBe(true);
+    });
+
+    it("just defunds when no fundable next dream exists", () => {
+      const dreams = [
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
+      ];
+      const goals = goalsFromDreams(dreams);
+      let state = initRedistribution(dreams, "funders", 200);
+      // First run funds both
+      state = stepRedistribution(state, goals);
+      expect(state.fundedByRun).toEqual(["a", "b"]);
       expect(state.isComplete).toBe(true);
     });
   });
 
-  describe("finishRedistribution", () => {
-    it("produces same result as stepping through", () => {
+  describe("finishRedistribution (Loop ON)", () => {
+    it("converges to same final state as iterative stepping", () => {
       const dreams = [
-        makeDream("a", 100, 80, 10),
-        makeDream("b", 200, 50, 5),
-        makeDream("c", 150, 30, 2),
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
+        makeDream("c", 60, 0, 5),
+        makeDream("d", 40, 0, 3),
       ];
       const goals = goalsFromDreams(dreams);
+      const totalBudget = 200;
 
-      // Step through
-      let stepped = initRedistribution(dreams, "funders");
-      while (!stepped.isComplete) {
+      let stepped = initRedistribution(dreams, "funders", totalBudget);
+      let safety = 50;
+      while (!stepped.isComplete && safety-- > 0) {
         stepped = stepRedistribution(stepped, goals);
       }
 
-      // Finish at once
       const finished = finishRedistribution(
-        initRedistribution(dreams, "funders"),
+        initRedistribution(dreams, "funders", totalBudget),
         goals
       );
 
       expect(finished.amounts).toEqual(stepped.amounts);
-      expect(finished.totalFunded).toEqual(stepped.totalFunded);
+      expect(finished.fundedByRun).toEqual(stepped.fundedByRun);
       expect(finished.totalContributed).toEqual(stepped.totalContributed);
     });
 
@@ -170,42 +248,74 @@ describe("freud-redistribution", () => {
       ];
       const goals = goalsFromDreams(dreams);
       const state = finishRedistribution(
-        initRedistribution(dreams, "combo"),
+        initRedistribution(dreams, "combo", 1000),
         goals
       );
       expect(state.isComplete).toBe(true);
       expect(state.steps).toHaveLength(0);
     });
+
+    it("does not exceed iteration cap on pathological input", () => {
+      const dreams = Array.from({ length: 20 }, (_, i) =>
+        makeDream(`d${i}`, 100, 0, 20 - i)
+      );
+      const goals = goalsFromDreams(dreams);
+      const state = finishRedistribution(
+        initRedistribution(dreams, "funders", 350),
+        goals
+      );
+      expect(state.isComplete).toBe(true);
+    });
   });
 
-  describe("getNextBucket", () => {
-    it("returns the bottom dream as next to defund", () => {
+  describe("getNextBuckets", () => {
+    it("returns next-to-fund and null defund before any run", () => {
       const dreams = [
-        makeDream("top", 100, 80, 10),
-        makeDream("bottom", 100, 30, 2),
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
       ];
       const goals = goalsFromDreams(dreams);
-      const state = initRedistribution(dreams, "funders");
-      const next = getNextBucket(state, goals);
-      expect(next).toEqual({ bucketId: "bottom", action: "defund" });
+      const state = initRedistribution(dreams, "funders", 250);
+      expect(getNextBuckets(state, goals)).toEqual({
+        nextToFund: "a",
+        nextToDefund: null,
+      });
     });
 
-    it("returns null when complete", () => {
+    it("returns both sides after first run when pot can't cover next dream", () => {
+      const dreams = [
+        makeDream("a", 100, 0, 10),
+        makeDream("b", 100, 0, 8),
+        makeDream("c", 100, 0, 5),
+      ];
+      const goals = goalsFromDreams(dreams);
+      let state = initRedistribution(dreams, "funders", 250);
+      state = stepRedistribution(state, goals);
+      expect(getNextBuckets(state, goals)).toEqual({
+        nextToFund: "c",
+        nextToDefund: "b",
+      });
+    });
+
+    it("returns nulls when complete", () => {
       const dreams = [makeDream("a", 100, 100, 5)];
       const goals = goalsFromDreams(dreams);
-      const state = initRedistribution(dreams, "funders");
-      expect(getNextBucket(state, goals)).toBeNull();
+      const state = initRedistribution(dreams, "funders", 100);
+      expect(state.isComplete).toBe(true);
+      expect(getNextBuckets(state, goals)).toEqual({
+        nextToFund: null,
+        nextToDefund: null,
+      });
     });
   });
 
   describe("tie breaking", () => {
     it("breaks ties alphabetically by title", () => {
       const dreams = [
-        { ...makeDream("b", 100, 50, 5), title: "Zebra" },
-        { ...makeDream("a", 100, 50, 5), title: "Alpha" },
+        { ...makeDream("b", 100, 0, 5), title: "Zebra" },
+        { ...makeDream("a", 100, 0, 5), title: "Alpha" },
       ];
-      const state = initRedistribution(dreams, "funders");
-      // Same funders, so alphabetical: Alpha first
+      const state = initRedistribution(dreams, "funders", 500);
       expect(state.sortedIds).toEqual(["a", "b"]);
     });
   });

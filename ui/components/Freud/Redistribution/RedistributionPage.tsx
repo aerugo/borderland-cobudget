@@ -271,7 +271,7 @@ export default function RedistributionPage({
               <th className="px-3 py-2 text-left text-xs text-gray-500">Reset</th>
               <th className="px-3 py-2 text-left text-xs text-gray-500">Run</th>
               <th className="px-3 py-2 text-left text-xs text-gray-500">Loop</th>
-              <th className="px-3 py-2 text-left text-xs text-gray-500">Next Bucket</th>
+              <th className="px-3 py-2 text-left text-xs text-gray-500">Next +/−</th>
               <th className="px-3 py-2 text-right text-xs text-gray-500">Funded</th>
               <th className="px-3 py-2 text-right text-xs text-gray-500">Contributed</th>
             </tr>
@@ -285,6 +285,7 @@ export default function RedistributionPage({
                 description={m.description}
                 dreams={dreams}
                 goals={goals}
+                totalBudget={totalBudget}
                 onResult={handleModelResult}
               />
             ))}
