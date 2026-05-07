@@ -15,6 +15,7 @@ import { BUCKETS_QUERY } from "pages/[group]/[round]";
 import { BUCKET_QUERY } from "pages/[group]/[round]/[bucket]";
 import { GROUP_PAGE_QUERY } from "components/Group";
 import { CURRENT_USER_QUERY } from "pages/_app";
+import { FREUD_DATA_QUERY } from "components/Freud/Redistribution/RedistributionPage";
 
 export const getUrl = (): string => {
   if (typeof window !== "undefined") return `/api`;
@@ -617,10 +618,27 @@ export const client = (
                 .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
             },
-            toggleFreudHeart(_result, _args, cache) {
+            toggleFreudHeart(result: any, args: any, cache) {
+              const newHearts = result?.toggleFreudHeart;
+              if (!Array.isArray(newHearts)) return;
               cache.inspectFields("Query")
                 .filter((f) => f.fieldName === "freudData")
-                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+                .forEach((f) => {
+                  cache.updateQuery(
+                    { query: FREUD_DATA_QUERY, variables: f.arguments },
+                    (data: any) => {
+                      if (!data?.freudData) return data;
+                      return {
+                        ...data,
+                        freudData: data.freudData.map((bd: any) =>
+                          bd?.bucket?.id === args.bucketId
+                            ? { ...bd, hearts: newHearts }
+                            : bd
+                        ),
+                      };
+                    }
+                  );
+                });
             },
             saveFreudSnapshot(_result, _args, cache) {
               cache.inspectFields("Query")
@@ -736,6 +754,59 @@ export const client = (
 
               cache.invalidate("Query", "currentUser");
             },
+          },
+        },
+        optimistic: {
+          toggleFreudHeart: (args: any, cache) => {
+            const currentUser: any = cache.readQuery({
+              query: CURRENT_USER_QUERY,
+              variables: {},
+            });
+            const memberId = currentUser?.currentUser?.currentCollMember?.id;
+            if (!memberId) return null;
+
+            let predictedHearts: any = null;
+            cache.inspectFields("Query")
+              .filter((f) => f.fieldName === "freudData")
+              .some((f) => {
+                const data: any = cache.readQuery({
+                  query: FREUD_DATA_QUERY,
+                  variables: f.arguments,
+                });
+                const bd = data?.freudData?.find(
+                  (b: any) => b?.bucket?.id === args.bucketId
+                );
+                if (!bd) return false;
+                const existing = bd.hearts ?? [];
+                const has = existing.some(
+                  (h: any) => h?.member?.id === memberId
+                );
+                if (has) {
+                  predictedHearts = existing.filter(
+                    (h: any) => h?.member?.id !== memberId
+                  );
+                } else {
+                  predictedHearts = [
+                    ...existing,
+                    {
+                      __typename: "FreudHeart",
+                      id: `optimistic-${memberId}-${args.bucketId}`,
+                      member: {
+                        __typename: "RoundMember",
+                        id: memberId,
+                        user: {
+                          __typename: "User",
+                          id: currentUser.currentUser.id,
+                          username: currentUser.currentUser.username,
+                          name: currentUser.currentUser.name,
+                        },
+                      },
+                    },
+                  ];
+                }
+                return true;
+              });
+            return predictedHearts ?? [];
           },
         },
       }),

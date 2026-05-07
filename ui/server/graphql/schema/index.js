@@ -460,7 +460,7 @@ const schema = gql`
     createDreamReviewComment(bucketId: ID!, content: String!, verdict: String): DreamReviewComment!
     editDreamReviewComment(id: ID!, content: String!, verdict: String): DreamReviewComment!
     deleteDreamReviewComment(id: ID!): Boolean!
-    toggleFreudHeart(bucketId: ID!): Boolean!
+    toggleFreudHeart(bucketId: ID!): [FreudHeart!]!
     saveFreudSnapshot(roundId: ID!, algorithm: String!, data: JSON!): FreudSnapshot!
     setFreudTotalBudget(roundId: ID!, amount: Int): Round!
     sendBatchEmail(roundId: ID!, subject: String!, summary: String, message: String!, bucketIds: [ID!]!): BatchEmail!

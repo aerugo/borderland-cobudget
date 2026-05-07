@@ -311,13 +311,17 @@ export const toggleFreudHeart = async (
   });
   if (existing) {
     await prisma.freudHeart.delete({ where: { id: existing.id } });
-    return false;
   } else {
     await prisma.freudHeart.create({
       data: { bucketId, memberId: member.id },
     });
-    return true;
   }
+
+  return prisma.freudHeart.findMany({
+    where: { bucketId },
+    include: { member: { include: { user: true } } },
+    orderBy: { createdAt: "asc" },
+  });
 };
 
 // ═══════════════════════════════════════════

@@ -12,6 +12,7 @@ import {
 import { FormattedNumber } from "react-intl";
 import ModelControlRow from "./ModelControlRow";
 import FundOverrideCell from "./FundOverrideCell";
+import HeartCell from "./HeartCell";
 import { SummarySkeleton, TableSkeleton } from "../LoadingSkeleton";
 import {
   FreudDream,
@@ -19,7 +20,7 @@ import {
   RedistributionState,
 } from "utils/freud-redistribution";
 
-const FREUD_DATA_QUERY = gql`
+export const FREUD_DATA_QUERY = gql`
   query FreudData($roundId: ID!) {
     freudData(roundId: $roundId) {
       bucket {
@@ -126,6 +127,8 @@ export default function RedistributionPage({
   }, []);
 
   const bucketData = result.data?.freudData ?? [];
+  const currentMemberId: string | null =
+    currentUser?.currentCollMember?.id ?? null;
 
   const dreams: FreudDream[] = useMemo(
     () =>
@@ -489,7 +492,6 @@ export default function RedistributionPage({
             {sorted.map((d) => {
               const progressPct = d.goal > 0 ? (d.funded / d.goal) * 100 : 0;
               const isFunded = d.funded >= d.goal;
-              const heartCount = d.hearts?.length ?? 0;
 
               const getModelCell = (method: SortMethod) => {
                 const st = modelResults[method];
@@ -561,14 +563,11 @@ export default function RedistributionPage({
                     </TableCell>
                   ))}
                   <TableCell className="!text-center">
-                    <button
-                      onClick={() => toggleHeart({ bucketId: d.bucket.id })}
-                      className={`text-lg ${heartCount > 0 ? "text-red-500" : "text-gray-300 hover:text-red-300"}`}
-                      title={heartCount > 0 ? `${heartCount} heart(s)` : "Heart this dream"}
-                    >
-                      {heartCount > 0 ? "♥" : "♡"}
-                      {heartCount > 1 && <span className="text-xs ml-0.5">{heartCount}</span>}
-                    </button>
+                    <HeartCell
+                      hearts={d.hearts ?? []}
+                      currentMemberId={currentMemberId}
+                      onToggle={() => toggleHeart({ bucketId: d.bucket.id })}
+                    />
                   </TableCell>
                 </TableRow>
               );
