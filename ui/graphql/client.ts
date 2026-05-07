@@ -758,11 +758,24 @@ export const client = (
         },
         optimistic: {
           toggleFreudHeart: (args: any, cache) => {
-            const currentUser: any = cache.readQuery({
-              query: CURRENT_USER_QUERY,
-              variables: {},
-            });
-            const memberId = currentUser?.currentUser?.currentCollMember?.id;
+            // currentUser is queried with {roundSlug, groupSlug} variables in
+            // _app.tsx; the optimistic handler doesn't know those, so scan
+            // every cached invocation until one resolves a currentCollMember.
+            let currentUser: any = null;
+            cache.inspectFields("Query")
+              .filter((f) => f.fieldName === "currentUser")
+              .some((f) => {
+                const data: any = cache.readQuery({
+                  query: CURRENT_USER_QUERY,
+                  variables: f.arguments,
+                });
+                if (data?.currentUser?.currentCollMember?.id) {
+                  currentUser = data.currentUser;
+                  return true;
+                }
+                return false;
+              });
+            const memberId = currentUser?.currentCollMember?.id;
             if (!memberId) return null;
 
             let predictedHearts: any = null;
@@ -796,9 +809,9 @@ export const client = (
                         id: memberId,
                         user: {
                           __typename: "User",
-                          id: currentUser.currentUser.id,
-                          username: currentUser.currentUser.username,
-                          name: currentUser.currentUser.name,
+                          id: currentUser.id,
+                          username: currentUser.username,
+                          name: currentUser.name,
                         },
                       },
                     },
