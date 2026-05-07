@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { gql, useMutation } from "urql";
 import { FormattedNumber } from "react-intl";
+import toast from "react-hot-toast";
 
 const SET_FREUD_TOTAL_BUDGET = gql`
   mutation SetFreudTotalBudget($roundId: ID!, $amount: Int) {
@@ -48,7 +49,15 @@ export default function BudgetSummaryPanel({
 
   const handleSaveBudget = async () => {
     const amount = budgetInput ? parseInt(budgetInput, 10) : null;
-    await setFreudBudget({ roundId: round.id, amount });
+    if (amount !== null && Number.isNaN(amount)) {
+      toast.error("Please enter a valid number");
+      return;
+    }
+    const result = await setFreudBudget({ roundId: round.id, amount });
+    if (result.error) {
+      toast.error(result.error.message.replace(/^\[GraphQL\]\s*/, ""));
+      return;
+    }
     setEditing(false);
   };
 
@@ -81,7 +90,10 @@ export default function BudgetSummaryPanel({
             </span>
           ) : (
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setBudgetInput(String(round?.freudTotalBudget ?? ""));
+                setEditing(true);
+              }}
               className="font-medium hover:underline"
             >
               {stats.totalBudget ? (

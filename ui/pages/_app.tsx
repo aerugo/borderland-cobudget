@@ -111,6 +111,7 @@ export const TOP_LEVEL_QUERY = gql`
       grantingIsOpen
       numberOfApprovedMembers
       globalBurnVerified
+      freudTotalBudget
       about
       membersLimit {
         consumedPercentage

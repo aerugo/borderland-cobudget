@@ -32,6 +32,27 @@ async function assertAdminOrMod(roundId: string, userId: string, ss: any) {
     throw new Error("You need to be admin or moderator of the round");
 }
 
+// Mirrors the FreudLayout access gate: round admin/mod OR group admin.
+async function assertFreudAccess(roundId: string, userId: string, ss: any) {
+  if (ss) return;
+  if (!userId) throw new Error("You need to be logged in");
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId, roundId } },
+  });
+  if (member?.isAdmin || member?.isModerator) return;
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: { groupId: true },
+  });
+  if (round?.groupId) {
+    const groupMember = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId: round.groupId, userId } },
+    });
+    if (groupMember?.isAdmin) return;
+  }
+  throw new Error("You need FREUD access to this round");
+}
+
 /**
  * Authorization gate for starting a new conversation. Policy:
  *   - Super admin sessions bypass.
@@ -328,7 +349,7 @@ export const setFreudTotalBudget = async (
   { roundId, amount },
   { user, ss }
 ) => {
-  await assertAdminOrMod(roundId, user?.id, ss);
+  await assertFreudAccess(roundId, user?.id, ss);
   return prisma.round.update({
     where: { id: roundId },
     data: { freudTotalBudget: amount },
