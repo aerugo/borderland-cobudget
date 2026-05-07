@@ -63,7 +63,17 @@ export const FREUD_DATA_QUERY = gql`
 
 const TOGGLE_HEART = gql`
   mutation ToggleFreudHeart($bucketId: ID!) {
-    toggleFreudHeart(bucketId: $bucketId)
+    toggleFreudHeart(bucketId: $bucketId) {
+      id
+      member {
+        id
+        user {
+          id
+          username
+          name
+        }
+      }
+    }
   }
 `;
 
