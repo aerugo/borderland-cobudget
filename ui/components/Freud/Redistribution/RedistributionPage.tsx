@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import {
   Table,
@@ -19,6 +19,105 @@ import {
   SortMethod,
   RedistributionState,
 } from "utils/freud-redistribution";
+
+type ColumnId =
+  | "title"
+  | "goal"
+  | "stretch"
+  | "funded"
+  | "missing"
+  | "funders"
+  | "progress"
+  | "fund"
+  | "combo"
+  | "fundersModel"
+  | "sek"
+  | "percent"
+  | "hearts";
+
+type SortColumn = Exclude<ColumnId, "fund">;
+
+type ColumnConfig = {
+  id: ColumnId;
+  label: string;
+  sortable: boolean;
+  align: "left" | "right" | "center";
+  defaultWidth: number;
+  minWidth: number;
+};
+
+const COLUMNS: ColumnConfig[] = [
+  { id: "title", label: "Dream", sortable: true, align: "left", defaultWidth: 240, minWidth: 80 },
+  { id: "goal", label: "Goal", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "stretch", label: "Stretch", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "funded", label: "Funded", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "missing", label: "Missing", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "funders", label: "Funders", sortable: true, align: "right", defaultWidth: 80, minWidth: 60 },
+  { id: "progress", label: "Progress", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "fund", label: "Fund", sortable: false, align: "left", defaultWidth: 160, minWidth: 100 },
+  { id: "combo", label: "M:Combo", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "fundersModel", label: "M:Funders", sortable: true, align: "right", defaultWidth: 100, minWidth: 60 },
+  { id: "sek", label: "M:SEK", sortable: true, align: "right", defaultWidth: 90, minWidth: 60 },
+  { id: "percent", label: "M:Percent", sortable: true, align: "right", defaultWidth: 100, minWidth: 60 },
+  { id: "hearts", label: "Heart", sortable: true, align: "center", defaultWidth: 80, minWidth: 60 },
+];
+
+const COLUMN_PREFS_KEY = "freud-redistribution-columns:v1";
+
+const defaultWidths = (): Record<ColumnId, number> =>
+  COLUMNS.reduce((acc, c) => {
+    acc[c.id] = c.defaultWidth;
+    return acc;
+  }, {} as Record<ColumnId, number>);
+
+function alignClass(align: "left" | "right" | "center"): string {
+  if (align === "right") return "!text-right";
+  if (align === "center") return "!text-center";
+  return "";
+}
+
+function ResizableHeaderCell({
+  col,
+  width,
+  sort,
+  onSort,
+  onResizeStart,
+}: {
+  col: ColumnConfig;
+  width: number;
+  sort: { column: SortColumn; direction: "asc" | "desc" };
+  onSort: (id: SortColumn) => void;
+  onResizeStart: (id: ColumnId, e: React.MouseEvent) => void;
+}) {
+  const sortable = col.sortable;
+  const sortId = col.id as SortColumn;
+  return (
+    <TableCell
+      style={{ width, minWidth: width, maxWidth: width, position: "relative" }}
+      className={`!font-semibold !text-xs !text-gray-500 ${alignClass(col.align)}`}
+      sortDirection={sortable && sort.column === sortId ? sort.direction : false}
+    >
+      {sortable ? (
+        <TableSortLabel
+          active={sort.column === sortId}
+          direction={sort.column === sortId ? sort.direction : "asc"}
+          onClick={() => onSort(sortId)}
+        >
+          {col.label}
+        </TableSortLabel>
+      ) : (
+        col.label
+      )}
+      <div
+        onMouseDown={(e) => onResizeStart(col.id, e)}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 select-none"
+        style={{ userSelect: "none" }}
+        title="Drag to resize"
+      />
+    </TableCell>
+  );
+}
 
 export const FREUD_DATA_QUERY = gql`
   query FreudData($roundId: ID!) {
@@ -114,19 +213,124 @@ export default function RedistributionPage({
     Record<string, { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }>
   >({});
 
-  type SortColumn =
-    | "title"
-    | "goal"
-    | "stretch"
-    | "funded"
-    | "missing"
-    | "funders"
-    | "progress"
-    | "combo"
-    | "fundersModel"
-    | "sek"
-    | "percent"
-    | "hearts";
+  const [columnWidths, setColumnWidths] =
+    useState<Record<ColumnId, number>>(defaultWidths);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnId>>(new Set());
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const prefsLoaded = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          widths?: Partial<Record<ColumnId, number>>;
+          hidden?: ColumnId[];
+        };
+        if (parsed.widths) {
+          setColumnWidths((prev) => ({ ...prev, ...parsed.widths }));
+        }
+        if (Array.isArray(parsed.hidden)) {
+          setHiddenColumns(new Set(parsed.hidden));
+        }
+      }
+    } catch {
+      // ignore corrupted prefs
+    }
+    prefsLoaded.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!prefsLoaded.current) return;
+    try {
+      window.localStorage.setItem(
+        COLUMN_PREFS_KEY,
+        JSON.stringify({
+          widths: columnWidths,
+          hidden: Array.from(hiddenColumns),
+        })
+      );
+    } catch {
+      // ignore quota errors
+    }
+  }, [columnWidths, hiddenColumns]);
+
+  useEffect(() => {
+    if (!columnsMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        columnsMenuRef.current &&
+        !columnsMenuRef.current.contains(e.target as Node)
+      ) {
+        setColumnsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [columnsMenuOpen]);
+
+  const handleResizeStart = useCallback(
+    (id: ColumnId, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const col = COLUMNS.find((c) => c.id === id);
+      if (!col) return;
+      const startX = e.clientX;
+      const startWidth = columnWidths[id] ?? col.defaultWidth;
+      const onMove = (ev: MouseEvent) => {
+        const next = Math.max(col.minWidth, startWidth + (ev.clientX - startX));
+        setColumnWidths((prev) => ({ ...prev, [id]: next }));
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [columnWidths]
+  );
+
+  const toggleColumnVisibility = useCallback((id: ColumnId) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const resetColumns = useCallback(() => {
+    setColumnWidths(defaultWidths());
+    setHiddenColumns(new Set());
+  }, []);
+
+  const isVisible = useCallback(
+    (id: ColumnId) => !hiddenColumns.has(id),
+    [hiddenColumns]
+  );
+  const widthStyle = useCallback(
+    (id: ColumnId): React.CSSProperties => {
+      const w = columnWidths[id];
+      return { width: w, minWidth: w, maxWidth: w };
+    },
+    [columnWidths]
+  );
+
+  const visibleColumns = useMemo(
+    () => COLUMNS.filter((c) => !hiddenColumns.has(c.id)),
+    [hiddenColumns]
+  );
+  const totalVisibleWidth = useMemo(
+    () => visibleColumns.reduce((sum, c) => sum + (columnWidths[c.id] ?? c.defaultWidth), 0),
+    [visibleColumns, columnWidths]
+  );
+
   const [sort, setSort] = useState<{ column: SortColumn; direction: "asc" | "desc" }>({
     column: "title",
     direction: "asc",
@@ -319,6 +523,37 @@ export default function RedistributionPage({
           />
           Show dreams that reached goal in granting
         </label>
+        <div className="relative" ref={columnsMenuRef}>
+          <button
+            onClick={() => setColumnsMenuOpen((o) => !o)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Columns ({visibleColumns.length}/{COLUMNS.length})
+          </button>
+          {columnsMenuOpen && (
+            <div className="absolute z-20 mt-1 bg-white border rounded-lg shadow-lg p-2 min-w-[200px] max-h-[400px] overflow-y-auto">
+              {COLUMNS.map((c) => (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-2 text-sm py-1 px-1 cursor-pointer hover:bg-gray-50 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!hiddenColumns.has(c.id)}
+                    onChange={() => toggleColumnVisibility(c.id)}
+                  />
+                  {c.label}
+                </label>
+              ))}
+              <button
+                onClick={resetColumns}
+                className="text-xs text-blue-600 hover:underline mt-2 px-1"
+              >
+                Reset all
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => {
             const headers = ["Dream", "Goal", "Stretch", "Funded", "Missing", "Funders", "Progress",
@@ -365,7 +600,7 @@ export default function RedistributionPage({
         className="overflow-x-auto"
         style={{ overflowY: "hidden" }}
       >
-        <div className="min-w-[1400px] h-[1px]" />
+        <div style={{ minWidth: totalVisibleWidth, height: 1 }} />
       </div>
       <TableContainer
         ref={tableScrollRef}
@@ -381,154 +616,22 @@ export default function RedistributionPage({
         }}
         className="overflow-x-auto"
       >
-        <Table size="small" className="min-w-[1400px]">
+        <Table
+          size="small"
+          style={{ tableLayout: "fixed", minWidth: totalVisibleWidth, width: totalVisibleWidth }}
+        >
           <TableHead>
             <TableRow>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500"
-                sortDirection={sort.column === "title" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "title"}
-                  direction={sort.column === "title" ? sort.direction : "asc"}
-                  onClick={() => handleSort("title")}
-                >
-                  Dream
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "goal" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "goal"}
-                  direction={sort.column === "goal" ? sort.direction : "asc"}
-                  onClick={() => handleSort("goal")}
-                >
-                  Goal
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "stretch" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "stretch"}
-                  direction={sort.column === "stretch" ? sort.direction : "asc"}
-                  onClick={() => handleSort("stretch")}
-                >
-                  Stretch
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "funded" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "funded"}
-                  direction={sort.column === "funded" ? sort.direction : "asc"}
-                  onClick={() => handleSort("funded")}
-                >
-                  Funded
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "missing" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "missing"}
-                  direction={sort.column === "missing" ? sort.direction : "asc"}
-                  onClick={() => handleSort("missing")}
-                >
-                  Missing
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "funders" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "funders"}
-                  direction={sort.column === "funders" ? sort.direction : "asc"}
-                  onClick={() => handleSort("funders")}
-                >
-                  Funders
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "progress" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "progress"}
-                  direction={sort.column === "progress" ? sort.direction : "asc"}
-                  onClick={() => handleSort("progress")}
-                >
-                  Progress
-                </TableSortLabel>
-              </TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">Fund</TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "combo" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "combo"}
-                  direction={sort.column === "combo" ? sort.direction : "asc"}
-                  onClick={() => handleSort("combo")}
-                >
-                  M:Combo
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "fundersModel" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "fundersModel"}
-                  direction={sort.column === "fundersModel" ? sort.direction : "asc"}
-                  onClick={() => handleSort("fundersModel")}
-                >
-                  M:Funders
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "sek" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "sek"}
-                  direction={sort.column === "sek" ? sort.direction : "asc"}
-                  onClick={() => handleSort("sek")}
-                >
-                  M:SEK
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-right"
-                sortDirection={sort.column === "percent" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "percent"}
-                  direction={sort.column === "percent" ? sort.direction : "asc"}
-                  onClick={() => handleSort("percent")}
-                >
-                  M:Percent
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                className="!font-semibold !text-xs !text-gray-500 !text-center"
-                sortDirection={sort.column === "hearts" ? sort.direction : false}
-              >
-                <TableSortLabel
-                  active={sort.column === "hearts"}
-                  direction={sort.column === "hearts" ? sort.direction : "asc"}
-                  onClick={() => handleSort("hearts")}
-                >
-                  Heart
-                </TableSortLabel>
-              </TableCell>
+              {visibleColumns.map((col) => (
+                <ResizableHeaderCell
+                  key={col.id}
+                  col={col}
+                  width={columnWidths[col.id] ?? col.defaultWidth}
+                  sort={sort}
+                  onSort={handleSort}
+                  onResizeStart={handleResizeStart}
+                />
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -553,65 +656,114 @@ export default function RedistributionPage({
                 return "";
               };
 
+              const modelMethodFor: Record<
+                "combo" | "fundersModel" | "sek" | "percent",
+                SortMethod
+              > = {
+                combo: "combo",
+                fundersModel: "funders",
+                sek: "sek",
+                percent: "percent",
+              };
+
               return (
                 <TableRow
                   key={d.bucket.id}
                   className={isFunded ? "bg-green-50" : "hover:bg-gray-50"}
                 >
-                  <TableCell className="!text-sm !font-medium max-w-[200px] truncate">
-                    {d.bucket.title}
-                  </TableCell>
-                  <TableCell className="!text-sm !text-right">
-                    <FormattedNumber value={d.goal} style="decimal" maximumFractionDigits={0} />
-                  </TableCell>
-                  <TableCell className="!text-sm !text-right">
-                    <FormattedNumber value={d.stretch} style="decimal" maximumFractionDigits={0} />
-                  </TableCell>
-                  <TableCell className={`!text-sm !text-right ${isFunded ? "text-green-700 font-medium" : ""}`}>
-                    <FormattedNumber value={d.funded} style="decimal" maximumFractionDigits={0} />
-                  </TableCell>
-                  <TableCell className={`!text-sm !text-right ${d.missing > 0 ? "text-red-600" : ""}`}>
-                    {d.missing > 0 ? (
-                      <>(<FormattedNumber value={d.missing} style="decimal" maximumFractionDigits={0} />)</>
-                    ) : (
-                      "0"
-                    )}
-                  </TableCell>
-                  <TableCell className="!text-sm !text-right">{d.funders}</TableCell>
-                  <TableCell className="!text-sm !text-right">
-                    <span className={progressPct >= 100 ? "text-green-600 font-medium" : ""}>
-                      {Math.round(progressPct)}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="!py-1">
-                    <FundOverrideCell
-                      bucketId={d.bucket.id}
-                      override={overrides[d.bucket.id]?.override ?? "model"}
-                      manualAmount={overrides[d.bucket.id]?.manualAmount}
-                      onChangeOverride={(id, ov, amt) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          [id]: { override: ov, manualAmount: amt },
-                        }))
-                      }
-                    />
-                  </TableCell>
-                  {(["combo", "funders", "sek", "percent"] as SortMethod[]).map((m) => (
-                    <TableCell key={m} className={`!text-sm !text-right ${getModelCellColor(m)}`}>
-                      {typeof getModelCell(m) === "number" ? (
-                        <FormattedNumber value={getModelCell(m) as number} style="decimal" maximumFractionDigits={0} />
+                  {isVisible("title") && (
+                    <TableCell
+                      style={widthStyle("title")}
+                      className="!text-sm !font-medium"
+                    >
+                      <div className="truncate">{d.bucket.title}</div>
+                    </TableCell>
+                  )}
+                  {isVisible("goal") && (
+                    <TableCell style={widthStyle("goal")} className="!text-sm !text-right">
+                      <FormattedNumber value={d.goal} style="decimal" maximumFractionDigits={0} />
+                    </TableCell>
+                  )}
+                  {isVisible("stretch") && (
+                    <TableCell style={widthStyle("stretch")} className="!text-sm !text-right">
+                      <FormattedNumber value={d.stretch} style="decimal" maximumFractionDigits={0} />
+                    </TableCell>
+                  )}
+                  {isVisible("funded") && (
+                    <TableCell
+                      style={widthStyle("funded")}
+                      className={`!text-sm !text-right ${isFunded ? "text-green-700 font-medium" : ""}`}
+                    >
+                      <FormattedNumber value={d.funded} style="decimal" maximumFractionDigits={0} />
+                    </TableCell>
+                  )}
+                  {isVisible("missing") && (
+                    <TableCell
+                      style={widthStyle("missing")}
+                      className={`!text-sm !text-right ${d.missing > 0 ? "text-red-600" : ""}`}
+                    >
+                      {d.missing > 0 ? (
+                        <>(<FormattedNumber value={d.missing} style="decimal" maximumFractionDigits={0} />)</>
                       ) : (
-                        getModelCell(m)
+                        "0"
                       )}
                     </TableCell>
-                  ))}
-                  <TableCell className="!text-center">
-                    <HeartCell
-                      hearts={d.hearts ?? []}
-                      currentMemberId={currentMemberId}
-                      onToggle={() => toggleHeart({ bucketId: d.bucket.id })}
-                    />
-                  </TableCell>
+                  )}
+                  {isVisible("funders") && (
+                    <TableCell style={widthStyle("funders")} className="!text-sm !text-right">
+                      {d.funders}
+                    </TableCell>
+                  )}
+                  {isVisible("progress") && (
+                    <TableCell style={widthStyle("progress")} className="!text-sm !text-right">
+                      <span className={progressPct >= 100 ? "text-green-600 font-medium" : ""}>
+                        {Math.round(progressPct)}%
+                      </span>
+                    </TableCell>
+                  )}
+                  {isVisible("fund") && (
+                    <TableCell style={widthStyle("fund")} className="!py-1">
+                      <FundOverrideCell
+                        bucketId={d.bucket.id}
+                        override={overrides[d.bucket.id]?.override ?? "model"}
+                        manualAmount={overrides[d.bucket.id]?.manualAmount}
+                        onChangeOverride={(id, ov, amt) =>
+                          setOverrides((prev) => ({
+                            ...prev,
+                            [id]: { override: ov, manualAmount: amt },
+                          }))
+                        }
+                      />
+                    </TableCell>
+                  )}
+                  {(["combo", "fundersModel", "sek", "percent"] as const).map((cid) =>
+                    isVisible(cid) ? (
+                      <TableCell
+                        key={cid}
+                        style={widthStyle(cid)}
+                        className={`!text-sm !text-right ${getModelCellColor(modelMethodFor[cid])}`}
+                      >
+                        {typeof getModelCell(modelMethodFor[cid]) === "number" ? (
+                          <FormattedNumber
+                            value={getModelCell(modelMethodFor[cid]) as number}
+                            style="decimal"
+                            maximumFractionDigits={0}
+                          />
+                        ) : (
+                          getModelCell(modelMethodFor[cid])
+                        )}
+                      </TableCell>
+                    ) : null
+                  )}
+                  {isVisible("hearts") && (
+                    <TableCell style={widthStyle("hearts")} className="!text-center">
+                      <HeartCell
+                        hearts={d.hearts ?? []}
+                        currentMemberId={currentMemberId}
+                        onToggle={() => toggleHeart({ bucketId: d.bucket.id })}
+                      />
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
