@@ -7,6 +7,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
 } from "@mui/material";
 import { FormattedNumber } from "react-intl";
 import ModelControlRow from "./ModelControlRow";
@@ -99,6 +100,31 @@ export default function RedistributionPage({
     Record<string, { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }>
   >({});
 
+  type SortColumn =
+    | "title"
+    | "goal"
+    | "stretch"
+    | "funded"
+    | "missing"
+    | "funders"
+    | "progress"
+    | "combo"
+    | "fundersModel"
+    | "sek"
+    | "percent"
+    | "hearts";
+  const [sort, setSort] = useState<{ column: SortColumn; direction: "asc" | "desc" }>({
+    column: "title",
+    direction: "asc",
+  });
+  const handleSort = useCallback((column: SortColumn) => {
+    setSort((prev) =>
+      prev.column === column
+        ? { column, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { column, direction: "asc" }
+    );
+  }, []);
+
   const bucketData = result.data?.freudData ?? [];
 
   const dreams: FreudDream[] = useMemo(
@@ -132,9 +158,52 @@ export default function RedistributionPage({
     []
   );
 
-  const filtered = showFunded
-    ? bucketData
-    : bucketData.filter((d) => d.funded < d.goal);
+  const filtered = useMemo(
+    () => (showFunded ? bucketData : bucketData.filter((d) => d.funded < d.goal)),
+    [bucketData, showFunded]
+  );
+
+  const sorted = useMemo(() => {
+    const getValue = (d: any, column: SortColumn): number | string => {
+      switch (column) {
+        case "title":
+          return (d.bucket.title ?? "").toLowerCase();
+        case "goal":
+          return d.goal ?? 0;
+        case "stretch":
+          return d.stretch ?? 0;
+        case "funded":
+          return d.funded ?? 0;
+        case "missing":
+          return d.missing ?? 0;
+        case "funders":
+          return d.funders ?? 0;
+        case "progress":
+          return d.goal > 0 ? d.funded / d.goal : 0;
+        case "combo":
+        case "sek":
+        case "percent":
+          return modelResults[column]?.amounts[d.bucket.id] ?? -Infinity;
+        case "fundersModel":
+          return modelResults.funders?.amounts[d.bucket.id] ?? -Infinity;
+        case "hearts":
+          return d.hearts?.length ?? 0;
+      }
+    };
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const va = getValue(a, sort.column);
+      const vb = getValue(b, sort.column);
+      let cmp: number;
+      if (typeof va === "string" && typeof vb === "string") {
+        cmp = va.localeCompare(vb);
+      } else {
+        cmp = (va as number) - (vb as number);
+      }
+      return sort.direction === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtered, sort, modelResults]);
 
   const currency = round?.currency ?? "SEK";
   const totalBudget = round?.freudTotalBudget ?? 0;
@@ -268,23 +337,155 @@ export default function RedistributionPage({
         <Table size="small" className="min-w-[1400px]">
           <TableHead>
             <TableRow>
-              <TableCell className="!font-semibold !text-xs !text-gray-500">Dream</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Goal</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Stretch</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Funded</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Missing</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Funders</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">Progress</TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500"
+                sortDirection={sort.column === "title" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "title"}
+                  direction={sort.column === "title" ? sort.direction : "asc"}
+                  onClick={() => handleSort("title")}
+                >
+                  Dream
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "goal" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "goal"}
+                  direction={sort.column === "goal" ? sort.direction : "asc"}
+                  onClick={() => handleSort("goal")}
+                >
+                  Goal
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "stretch" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "stretch"}
+                  direction={sort.column === "stretch" ? sort.direction : "asc"}
+                  onClick={() => handleSort("stretch")}
+                >
+                  Stretch
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "funded" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "funded"}
+                  direction={sort.column === "funded" ? sort.direction : "asc"}
+                  onClick={() => handleSort("funded")}
+                >
+                  Funded
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "missing" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "missing"}
+                  direction={sort.column === "missing" ? sort.direction : "asc"}
+                  onClick={() => handleSort("missing")}
+                >
+                  Missing
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "funders" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "funders"}
+                  direction={sort.column === "funders" ? sort.direction : "asc"}
+                  onClick={() => handleSort("funders")}
+                >
+                  Funders
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "progress" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "progress"}
+                  direction={sort.column === "progress" ? sort.direction : "asc"}
+                  onClick={() => handleSort("progress")}
+                >
+                  Progress
+                </TableSortLabel>
+              </TableCell>
               <TableCell className="!font-semibold !text-xs !text-gray-500">Fund</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:Combo</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:Funders</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:SEK</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-right">M:Percent</TableCell>
-              <TableCell className="!font-semibold !text-xs !text-gray-500 !text-center">Heart</TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "combo" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "combo"}
+                  direction={sort.column === "combo" ? sort.direction : "asc"}
+                  onClick={() => handleSort("combo")}
+                >
+                  M:Combo
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "fundersModel" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "fundersModel"}
+                  direction={sort.column === "fundersModel" ? sort.direction : "asc"}
+                  onClick={() => handleSort("fundersModel")}
+                >
+                  M:Funders
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "sek" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "sek"}
+                  direction={sort.column === "sek" ? sort.direction : "asc"}
+                  onClick={() => handleSort("sek")}
+                >
+                  M:SEK
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-right"
+                sortDirection={sort.column === "percent" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "percent"}
+                  direction={sort.column === "percent" ? sort.direction : "asc"}
+                  onClick={() => handleSort("percent")}
+                >
+                  M:Percent
+                </TableSortLabel>
+              </TableCell>
+              <TableCell
+                className="!font-semibold !text-xs !text-gray-500 !text-center"
+                sortDirection={sort.column === "hearts" ? sort.direction : false}
+              >
+                <TableSortLabel
+                  active={sort.column === "hearts"}
+                  direction={sort.column === "hearts" ? sort.direction : "asc"}
+                  onClick={() => handleSort("hearts")}
+                >
+                  Heart
+                </TableSortLabel>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filtered.map((d) => {
+            {sorted.map((d) => {
               const progressPct = d.goal > 0 ? (d.funded / d.goal) * 100 : 0;
               const isFunded = d.funded >= d.goal;
               const heartCount = d.hearts?.length ?? 0;
