@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import { gql, useQuery, useMutation } from "urql";
 import {
   Table,
@@ -99,6 +99,9 @@ export default function RedistributionPage({
 
   const [, toggleHeart] = useMutation(TOGGLE_HEART);
   const [showFunded, setShowFunded] = useState(false);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const syncingFrom = useRef<"top" | "bottom" | null>(null);
   const [modelResults, setModelResults] = useState<
     Record<SortMethod, RedistributionState | null>
   >({
@@ -347,7 +350,37 @@ export default function RedistributionPage({
       </div>
 
       {/* Redistribution Table */}
-      <TableContainer className="overflow-x-auto">
+      <div
+        ref={topScrollRef}
+        onScroll={() => {
+          if (syncingFrom.current === "bottom") {
+            syncingFrom.current = null;
+            return;
+          }
+          syncingFrom.current = "top";
+          if (tableScrollRef.current && topScrollRef.current) {
+            tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+          }
+        }}
+        className="overflow-x-auto"
+        style={{ overflowY: "hidden" }}
+      >
+        <div className="min-w-[1400px] h-[1px]" />
+      </div>
+      <TableContainer
+        ref={tableScrollRef}
+        onScroll={() => {
+          if (syncingFrom.current === "top") {
+            syncingFrom.current = null;
+            return;
+          }
+          syncingFrom.current = "bottom";
+          if (tableScrollRef.current && topScrollRef.current) {
+            topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+          }
+        }}
+        className="overflow-x-auto"
+      >
         <Table size="small" className="min-w-[1400px]">
           <TableHead>
             <TableRow>
