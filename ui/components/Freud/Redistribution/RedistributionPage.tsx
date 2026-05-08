@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import Link from "next/link";
 import { gql, useQuery, useMutation } from "urql";
 import {
   Table,
@@ -186,9 +187,13 @@ const MODELS: { method: SortMethod; label: string; description: string }[] = [
 export default function RedistributionPage({
   round,
   currentUser,
+  groupSlug,
+  roundSlug,
 }: {
   round: any;
   currentUser: any;
+  groupSlug: string;
+  roundSlug: string;
 }) {
   const [result] = useQuery({
     query: FREUD_DATA_QUERY,
@@ -217,6 +222,7 @@ export default function RedistributionPage({
     useState<Record<ColumnId, number>>(defaultWidths);
   const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnId>>(new Set());
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const prefsLoaded = useRef(false);
 
@@ -455,6 +461,183 @@ export default function RedistributionPage({
 
   return (
     <div>
+      {/* Help / Instructions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg mb-4">
+        <button
+          onClick={() => setHelpOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-blue-900 hover:bg-blue-100 rounded-lg"
+          aria-expanded={helpOpen}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">?</span>
+            How redistribution works
+          </span>
+          <span className="text-xs text-blue-700">
+            {helpOpen ? "Hide" : "Show"}
+          </span>
+        </button>
+        {helpOpen && (
+          <div className="px-4 pb-4 pt-1 text-sm text-gray-700 space-y-4 border-t border-blue-200">
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">The big picture</h3>
+              <p>
+                Each model takes the round&apos;s total budget and tries to fully
+                fund as many eligible dreams as possible, in priority order. A
+                dream is &quot;funded&quot; only when its allocation reaches its goal —
+                partial allocations are not made. Dreams already at goal in the
+                granting phase keep their funded amount and are excluded from
+                redistribution. The leftover money after redistribution is the
+                model&apos;s pot at zero; whatever cannot be allocated stays in the
+                pot.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">The four ranking models</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <span className="font-medium">Funders</span> — sorts dreams by
+                  number of distinct funders, descending. Rewards broad
+                  community support.
+                </li>
+                <li>
+                  <span className="font-medium">SEK</span> — sorts by absolute
+                  amount left to goal (goal − funded), ascending. Cheapest-to-
+                  finish dreams come first.
+                </li>
+                <li>
+                  <span className="font-medium">Percent</span> — sorts by share
+                  of goal already raised, descending. Closest-to-finish dreams
+                  come first.
+                </li>
+                <li>
+                  <span className="font-medium">Combo</span> — sums each
+                  dream&apos;s rank in the three lists above and sorts ascending.
+                  A dream that scores well across all three rises to the top.
+                </li>
+              </ul>
+              <p className="mt-1 text-xs text-gray-500">
+                Ties are broken alphabetically by dream title.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">Run, Loop, and Reset</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <span className="font-medium">Run (Loop off)</span> — performs
+                  one step. The first step funds dreams from the top of the
+                  ranking until the pot can&apos;t cover the next dream&apos;s remaining
+                  need. Each later step defunds the most recently funded dream
+                  (returning its allocation to the pot) and then tries to fund
+                  forward from where it stopped. This lets you watch a single
+                  swap at a time.
+                </li>
+                <li>
+                  <span className="font-medium">Run (Loop on, &quot;Run all&quot;)</span> —
+                  steps repeatedly until the model is complete: no further
+                  defund-then-fund swap can help. The pot at that point is what
+                  the model couldn&apos;t allocate.
+                </li>
+                <li>
+                  <span className="font-medium">Reset</span> — clears the
+                  model&apos;s state. Allocations, the pot, and the step history all
+                  return to their starting values, and the model is ready to
+                  run again with the current overrides and budget.
+                </li>
+                <li>
+                  <span className="font-medium">Done</span> — appears in place
+                  of Run when the model has nothing left to do.
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">Per-dream overrides (the Fund column)</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <span className="font-medium">Model</span> — default; the
+                  dream is eligible and ranked by the active model.
+                </li>
+                <li>
+                  <span className="font-medium">Manual</span> — you set a fixed
+                  amount. That amount is locked in and removed from the pot
+                  before the model runs.
+                </li>
+                <li>
+                  <span className="font-medium">Skip</span> — the dream is
+                  excluded from redistribution and gets 0 from the model.
+                </li>
+                <li>
+                  <span className="font-medium">Lock</span> — the dream&apos;s goal
+                  is funded in full and removed from the pot before the model
+                  runs.
+                </li>
+              </ul>
+              <p className="mt-1 text-xs text-gray-500">
+                Changing overrides does not auto-rerun any model. Press Reset
+                and Run on a model to see the new result.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">Reading the table</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <span className="font-medium">Goal / Stretch / Funded / Missing</span> —
+                  current state from granting. Missing is goal − funded.
+                </li>
+                <li>
+                  <span className="font-medium">Funders</span> — distinct
+                  funders during granting.
+                </li>
+                <li>
+                  <span className="font-medium">M:Combo / M:Funders / M:SEK / M:Percent</span> —
+                  what each model would allocate to this dream after Run/Loop.
+                  Green cell = funded to goal; yellow = partial (only for
+                  manual overrides, since the algorithm itself is all-or-
+                  nothing); blank = nothing yet.
+                </li>
+                <li>
+                  <span className="font-medium">Heart</span> — admins/mods can
+                  star dreams they want to advocate for. Hearts are advisory:
+                  they do not influence the algorithm, only sorting.
+                </li>
+                <li>
+                  <span className="font-medium">Next +/−</span> (per model row) —
+                  the dream the model would fund next on Run, and the dream it
+                  would defund next.
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="font-semibold text-gray-900 mb-1">View controls</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <span className="font-medium">Show dreams that reached goal in granting</span> —
+                  toggles whether already-funded dreams appear in the table.
+                  They are always included in the model&apos;s totals regardless.
+                </li>
+                <li>
+                  <span className="font-medium">Columns</span> — show, hide, or
+                  resize columns. Drag the right edge of any header to resize.
+                  Preferences persist in your browser.
+                </li>
+                <li>
+                  <span className="font-medium">Export CSV</span> — downloads
+                  the current visible rows with all model amounts.
+                </li>
+                <li>
+                  <span className="font-medium">Dream titles</span> — open the
+                  dream page in a new tab.
+                </li>
+              </ul>
+            </section>
+          </div>
+        )}
+      </div>
+
       {/* Budget Summary */}
       <div className="bg-white border rounded-lg p-4 mb-4 grid grid-cols-2 gap-4 text-sm">
         <div className="space-y-1">
@@ -676,7 +859,14 @@ export default function RedistributionPage({
                       style={widthStyle("title")}
                       className="!text-sm !font-medium"
                     >
-                      <div className="truncate">{d.bucket.title}</div>
+                      <Link
+                        href={`/${groupSlug}/${roundSlug}/${d.bucket.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline text-blue-700 truncate block"
+                      >
+                        {d.bucket.title}
+                      </Link>
                     </TableCell>
                   )}
                   {isVisible("goal") && (
