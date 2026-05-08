@@ -160,7 +160,7 @@ export const freudData = async (
   await assertAdminOrMod(roundId, user?.id, ss);
 
   const buckets = await prisma.bucket.findMany({
-    where: { roundId, deleted: { not: true } },
+    where: { roundId, deleted: { not: true }, canceledAt: null },
     include: {
       dreamReviewTags: true,
       flags: {
