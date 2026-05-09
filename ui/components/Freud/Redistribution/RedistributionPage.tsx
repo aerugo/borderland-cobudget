@@ -161,6 +161,62 @@ export const FREUD_DATA_QUERY = gql`
   }
 `;
 
+export const FREUD_OVERRIDES_QUERY = gql`
+  query FreudOverrides($roundId: ID!) {
+    freudOverrides(roundId: $roundId) {
+      id
+      bucketId
+      type
+      manualAmount
+      updatedAt
+      updatedBy {
+        id
+        user {
+          id
+          username
+          name
+        }
+      }
+    }
+  }
+`;
+
+const SET_FREUD_OVERRIDE = gql`
+  mutation SetFreudOverride(
+    $roundId: ID!
+    $bucketId: ID!
+    $type: String!
+    $manualAmount: Int
+  ) {
+    setFreudOverride(
+      roundId: $roundId
+      bucketId: $bucketId
+      type: $type
+      manualAmount: $manualAmount
+    ) {
+      id
+      bucketId
+      type
+      manualAmount
+      updatedAt
+      updatedBy {
+        id
+        user {
+          id
+          username
+          name
+        }
+      }
+    }
+  }
+`;
+
+const CLEAR_FREUD_OVERRIDE = gql`
+  mutation ClearFreudOverride($roundId: ID!, $bucketId: ID!) {
+    clearFreudOverride(roundId: $roundId, bucketId: $bucketId)
+  }
+`;
+
 const TOGGLE_HEART = gql`
   mutation ToggleFreudHeart($bucketId: ID!) {
     toggleFreudHeart(bucketId: $bucketId) {
@@ -176,6 +232,8 @@ const TOGGLE_HEART = gql`
     }
   }
 `;
+
+const OVERRIDES_POLL_MS = 4000;
 
 const MODELS: { method: SortMethod; label: string; description: string }[] = [
   { method: "combo", label: "Combo", description: "Rank by A+B+C combo" },
@@ -201,7 +259,56 @@ export default function RedistributionPage({
     pause: !round?.id,
   });
 
+  const [overridesResult, reexecuteOverrides] = useQuery({
+    query: FREUD_OVERRIDES_QUERY,
+    variables: { roundId: round.id },
+    pause: !round?.id,
+    requestPolicy: "cache-and-network",
+  });
+
+  useEffect(() => {
+    if (!round?.id) return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (intervalId !== null) return;
+      intervalId = setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) return;
+        reexecuteOverrides({ requestPolicy: "network-only" });
+      }, OVERRIDES_POLL_MS);
+    };
+    const stop = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        reexecuteOverrides({ requestPolicy: "network-only" });
+        start();
+      }
+    };
+    if (typeof document !== "undefined" && document.hidden) {
+      // wait until tab becomes visible
+    } else {
+      start();
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    return () => {
+      stop();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
+  }, [round?.id, reexecuteOverrides]);
+
   const [, toggleHeart] = useMutation(TOGGLE_HEART);
+  const [, setOverrideMutation] = useMutation(SET_FREUD_OVERRIDE);
+  const [, clearOverrideMutation] = useMutation(CLEAR_FREUD_OVERRIDE);
   const [showFunded, setShowFunded] = useState(false);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -214,9 +321,45 @@ export default function RedistributionPage({
     sek: null,
     percent: null,
   });
-  const [overrides, setOverrides] = useState<
-    Record<string, { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }>
-  >({});
+
+  const overrides: Record<
+    string,
+    { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }
+  > = useMemo(() => {
+    const map: Record<
+      string,
+      { override: "model" | "manual" | "skip" | "lock"; manualAmount?: number }
+    > = {};
+    const rows = overridesResult.data?.freudOverrides ?? [];
+    for (const r of rows) {
+      const t = r.type as "manual" | "skip" | "lock";
+      map[r.bucketId] = {
+        override: t,
+        manualAmount: t === "manual" ? r.manualAmount ?? undefined : undefined,
+      };
+    }
+    return map;
+  }, [overridesResult.data]);
+
+  const handleChangeOverride = useCallback(
+    (
+      bucketId: string,
+      override: "model" | "manual" | "skip" | "lock",
+      manualAmount?: number
+    ) => {
+      if (override === "model") {
+        clearOverrideMutation({ roundId: round.id, bucketId });
+      } else {
+        setOverrideMutation({
+          roundId: round.id,
+          bucketId,
+          type: override,
+          manualAmount: override === "manual" ? manualAmount ?? 0 : null,
+        });
+      }
+    },
+    [round?.id, setOverrideMutation, clearOverrideMutation]
+  );
 
   const [columnWidths, setColumnWidths] =
     useState<Record<ColumnId, number>>(defaultWidths);
@@ -917,12 +1060,7 @@ export default function RedistributionPage({
                         bucketId={d.bucket.id}
                         override={overrides[d.bucket.id]?.override ?? "model"}
                         manualAmount={overrides[d.bucket.id]?.manualAmount}
-                        onChangeOverride={(id, ov, amt) =>
-                          setOverrides((prev) => ({
-                            ...prev,
-                            [id]: { override: ov, manualAmount: amt },
-                          }))
-                        }
+                        onChangeOverride={handleChangeOverride}
                       />
                     </TableCell>
                   )}

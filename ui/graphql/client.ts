@@ -645,6 +645,16 @@ export const client = (
                 .filter((f) => f.fieldName === "freudSnapshots")
                 .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
             },
+            setFreudOverride(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudOverrides")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            clearFreudOverride(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudOverrides")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
             setFreudTotalBudget(_result, _args, cache) {
               cache.inspectFields("Query")
                 .filter((f) => f.fieldName === "round")

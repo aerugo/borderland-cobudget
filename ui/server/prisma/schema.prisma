@@ -162,6 +162,7 @@ model RoundMember {
   dreamReviewComments  DreamReviewComment[]
   freudHearts          FreudHeart[]
   freudSnapshots       FreudSnapshot[]
+  freudOverrides       FreudOverride[]
   batchEmailsSent      BatchEmail[]
   conversationsCreated Conversation[]
   conversationMessages ConversationMessage[]
@@ -275,6 +276,7 @@ model Round {
 
   dreamReviewTags DreamReviewTag[]
   freudSnapshots  FreudSnapshot[]
+  freudOverrides  FreudOverride[]
   batchEmails     BatchEmail[]
   conversations   Conversation[]
 
@@ -417,6 +419,7 @@ model Bucket {
   dreamReviews        DreamReview[]
   dreamReviewComments DreamReviewComment[]
   freudHearts         FreudHeart[]
+  freudOverrides      FreudOverride[]
   conversations       Conversation[]   @relation("ConversationBuckets")
 }
 
@@ -673,6 +676,23 @@ model FreudSnapshot {
   createdAt   DateTime    @default(now()) @map("created_at")
 
   @@map("freud_snapshots")
+}
+
+model FreudOverride {
+  id           String      @id @default(cuid())
+  roundId      String      @map("collection_id")
+  round        Round       @relation(fields: [roundId], references: [id])
+  bucketId     String      @map("bucket_id")
+  bucket       Bucket      @relation(fields: [bucketId], references: [id])
+  type         String
+  manualAmount Int?        @map("manual_amount")
+  updatedById  String      @map("updated_by_id")
+  updatedBy    RoundMember @relation(fields: [updatedById], references: [id])
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@unique([roundId, bucketId])
+  @@map("freud_overrides")
 }
 
 // ═══════════════════════════════════════════

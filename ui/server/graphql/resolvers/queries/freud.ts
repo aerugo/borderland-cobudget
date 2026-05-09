@@ -254,6 +254,18 @@ export const freudData = async (
   });
 };
 
+export const freudOverrides = async (
+  _parent,
+  { roundId },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  return prisma.freudOverride.findMany({
+    where: { roundId },
+    include: { updatedBy: { include: { user: true } } },
+  });
+};
+
 export const freudSnapshots = async (
   _parent,
   { roundId },

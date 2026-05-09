@@ -361,6 +361,67 @@ export const setFreudTotalBudget = async (
 };
 
 // ═══════════════════════════════════════════
+// FREUD Overrides (per-bucket Manual/Skip/Lock)
+// ═══════════════════════════════════════════
+
+const VALID_OVERRIDE_TYPES = new Set(["manual", "skip", "lock"]);
+
+export const setFreudOverride = async (
+  _parent,
+  { roundId, bucketId, type, manualAmount },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  if (!VALID_OVERRIDE_TYPES.has(type)) {
+    throw new Error(`Invalid override type: ${type}`);
+  }
+  if (!user?.id) throw new Error("You need to be logged in");
+  const member = await prisma.roundMember.findUnique({
+    where: { userId_roundId: { userId: user.id, roundId } },
+  });
+  if (!member) throw new Error("Round member not found");
+
+  const bucket = await prisma.bucket.findUnique({
+    where: { id: bucketId },
+    select: { roundId: true },
+  });
+  if (!bucket || bucket.roundId !== roundId) {
+    throw new Error("Bucket not in round");
+  }
+
+  const amount = type === "manual" ? manualAmount ?? 0 : null;
+
+  return prisma.freudOverride.upsert({
+    where: { roundId_bucketId: { roundId, bucketId } },
+    create: {
+      roundId,
+      bucketId,
+      type,
+      manualAmount: amount,
+      updatedById: member.id,
+    },
+    update: {
+      type,
+      manualAmount: amount,
+      updatedById: member.id,
+    },
+    include: { updatedBy: { include: { user: true } } },
+  });
+};
+
+export const clearFreudOverride = async (
+  _parent,
+  { roundId, bucketId },
+  { user, ss }
+) => {
+  await assertAdminOrMod(roundId, user?.id, ss);
+  await prisma.freudOverride
+    .delete({ where: { roundId_bucketId: { roundId, bucketId } } })
+    .catch(() => null);
+  return true;
+};
+
+// ═══════════════════════════════════════════
 // Batch Emails
 // ═══════════════════════════════════════════
 

@@ -132,6 +132,7 @@ const schema = gql`
     dreamReviewComments(bucketId: ID!): [DreamReviewComment!]!
     freudData(roundId: ID!): [FreudBucketData!]!
     freudSnapshots(roundId: ID!): [FreudSnapshot!]!
+    freudOverrides(roundId: ID!): [FreudOverride!]!
     batchEmails(roundId: ID!): [BatchEmail!]!
     bucketConversations(bucketId: ID!): [FreudConversation!]!
     conversations(roundId: ID!): [FreudConversation!]!
@@ -463,6 +464,8 @@ const schema = gql`
     toggleFreudHeart(bucketId: ID!): [FreudHeart!]!
     saveFreudSnapshot(roundId: ID!, algorithm: String!, data: JSON!): FreudSnapshot!
     setFreudTotalBudget(roundId: ID!, amount: Int): Round!
+    setFreudOverride(roundId: ID!, bucketId: ID!, type: String!, manualAmount: Int): FreudOverride!
+    clearFreudOverride(roundId: ID!, bucketId: ID!): Boolean!
     sendBatchEmail(roundId: ID!, subject: String!, summary: String, message: String!, bucketIds: [ID!]!): BatchEmail!
     createConversation(roundId: ID!, title: String!, bucketIds: [ID!]!, initialMessage: String!): FreudConversation!
     addConversationMessage(conversationId: ID!, content: String!): ConversationMessage!
@@ -1274,6 +1277,15 @@ const schema = gql`
     data: JSON!
     createdBy: RoundMember!
     createdAt: Date!
+  }
+
+  type FreudOverride {
+    id: ID!
+    bucketId: ID!
+    type: String!
+    manualAmount: Int
+    updatedBy: RoundMember!
+    updatedAt: Date!
   }
 
   type BatchEmail {

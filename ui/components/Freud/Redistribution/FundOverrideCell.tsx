@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type OverrideType = "model" | "manual" | "skip" | "lock";
 
@@ -20,6 +20,12 @@ export default function FundOverrideCell({
   const [localAmount, setLocalAmount] = useState(
     String(manualAmount ?? "")
   );
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (focusedRef.current) return;
+    setLocalAmount(String(manualAmount ?? ""));
+  }, [manualAmount]);
 
   return (
     <div className="flex items-center gap-1">
@@ -45,13 +51,17 @@ export default function FundOverrideCell({
           type="number"
           value={localAmount}
           onChange={(e) => setLocalAmount(e.target.value)}
-          onBlur={() =>
+          onFocus={() => {
+            focusedRef.current = true;
+          }}
+          onBlur={() => {
+            focusedRef.current = false;
             onChangeOverride(
               bucketId,
               "manual",
               parseInt(localAmount, 10) || 0
-            )
-          }
+            );
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               onChangeOverride(
