@@ -16,6 +16,7 @@ import {
   roundMemberBalance,
   statusTypeToQuery,
   stripeIsConnected,
+  validateOCToken,
 } from "../helpers";
 import { verify } from "server/utils/jwt";
 import emailService from "server/services/EmailService/email.service";
@@ -122,7 +123,7 @@ export const editOCToken = combineResolvers(
     if (!ocToken || !ocToken.trim()) {
       throw new Error("Token is required");
     }
-    const result = await getCollective({ slug: "cobudget" }, ocToken);
+    const result = await validateOCToken(ocToken);
     if (result?.error) {
       if (result.error.status === UNAUTHORIZED_STATUS) {
         throw new Error(UNAUTHORIZED);

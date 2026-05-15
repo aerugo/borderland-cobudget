@@ -2,7 +2,7 @@ import { UNAUTHORIZED } from "../../../../constants";
 import { customOCGqlClient } from "utils/graphqlClient";
 
 export const GET_COLLECTIVE = `
-    query ($slug: String, $id: String, $limit: Int, $account: AccountReferenceInput!){
+    query ($slug: String, $id: String, $limit: Int!, $offset: Int!){
       collective (slug:$slug, id: $id) {
         id
         slug
@@ -14,7 +14,7 @@ export const GET_COLLECTIVE = `
             valueInCents
           }
         }
-        webhooks(limit: $limit, account: $account) {
+        webhooks(limit: $limit, offset: $offset) {
           totalCount
           limit
           nodes {
@@ -26,13 +26,13 @@ export const GET_COLLECTIVE = `
 `;
 
 export const GET_PROJECT = `
-    query ($slug: String, $id: String,  $limit: Int, $account: AccountReferenceInput!) {
+    query ($slug: String, $id: String, $limit: Int!, $offset: Int!) {
         project (slug:$slug, id: $id) {
           id
           slug
           name
           type
-          webhooks(limit: $limit, account: $account) {
+          webhooks(limit: $limit, offset: $offset) {
             totalCount
             limit
             nodes {
@@ -161,6 +161,28 @@ const handleOCError = (err) => {
   };
 };
 
+export const VALIDATE_TOKEN = `
+  query {
+    loggedInAccount {
+      id
+      slug
+    }
+  }
+`;
+
+export const validateOCToken = async (token: string) => {
+  const graphqlClient = customOCGqlClient(token);
+  try {
+    const response = await graphqlClient.request(VALIDATE_TOKEN);
+    if (!response?.loggedInAccount?.id) {
+      return { error: { status: 401, message: UNAUTHORIZED } };
+    }
+    return response.loggedInAccount;
+  } catch (err) {
+    return handleOCError(err);
+  }
+};
+
 export const getCollective = async (
   filter: { slug?: string; id?: string },
   token: string
@@ -170,10 +192,7 @@ export const getCollective = async (
     const response = await graphqlClient.request(GET_COLLECTIVE, {
       ...filter,
       limit: 100,
-      account: {
-        slug: filter.slug,
-        id: filter.id,
-      },
+      offset: 0,
     });
     return response.collective;
   } catch (err) {
@@ -190,10 +209,7 @@ export const getProject = async (
     const response = await graphqlClient.request(GET_PROJECT, {
       ...filter,
       limit: 100,
-      account: {
-        slug: filter.slug,
-        id: filter.id,
-      },
+      offset: 0,
     });
     return response.project;
   } catch (err) {
