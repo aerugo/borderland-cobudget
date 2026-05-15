@@ -256,11 +256,16 @@ export const status = async (bucket) => {
       (await getRoundFundingStatuses({ roundId: bucket.roundId }));
 
     if (fundingStatus.hasEnded) {
-      // Only call it PARTIAL_FUNDING if there's > 0 total contributions
       const total =
         bucket._computed?.totalContributions ??
         (await bucketTotalContributions(bucket));
-      return total > 0 ? "PARTIAL_FUNDING" : "IDEA";
+      if (total <= 0) return "IDEA";
+      const min =
+        bucket._computed?.minGoal ?? (await bucketMinGoal(bucket));
+      // Reached the (min) goal counts as FUNDED; PARTIAL_FUNDING is reserved
+      // for buckets that fell short of goal but kept their partial funding.
+      if (min > 0 && total >= min) return "FUNDED";
+      return "PARTIAL_FUNDING";
     }
 
     // If the round is ongoing, call it OPEN_FOR_FUNDING
