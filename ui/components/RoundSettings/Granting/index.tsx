@@ -5,7 +5,7 @@ import { useRouter } from "next/router";
 import dayjs from "dayjs";
 import { FormattedMessage, useIntl } from "react-intl";
 import capitalize from "utils/capitalize";
-import HappySpinner from "components/HappySpinner";
+import Spinner from "components/Spinner";
 
 import SettingsListItem from "./SettingsListItem";
 import SetCurrency from "./SetCurrency";
@@ -52,6 +52,7 @@ const GET_ROUND_FUNDING_SETTINGS = gql`
       bucketCreationIsOpen
       allowStretchGoals
       stripeIsConnected
+      stripeIsConfigured
       directFundingEnabled
       directFundingTerms
       canCocreatorStartFunding
@@ -141,7 +142,11 @@ const RoundSettingsModalGranting = ({ currentGroup }) => {
   }
 
   if (fetching || !round) {
-    return <HappySpinner className="mx-auto" />;
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner size="lg" className="text-gray-400" />
+      </div>
+    );
   }
 
   return (
@@ -346,10 +351,17 @@ const RoundSettingsModalGranting = ({ currentGroup }) => {
                 primary={intl.formatMessage({
                   defaultMessage: "Connect with Stripe",
                 })}
-                secondary={round.stripeIsConnected?.toString() ?? "false"}
+                secondary={
+                  !round.stripeIsConfigured
+                    ? intl.formatMessage({
+                        defaultMessage: "Stripe not configured",
+                      })
+                    : round.stripeIsConnected?.toString() ?? "false"
+                }
                 isSet={round.stripeIsConnected}
                 openModal={() => handleOpen("SET_STRIPE")}
                 canEdit={canEditSettings}
+                disabled={!round.stripeIsConfigured}
                 roundColor={round.color}
               />
 
@@ -359,10 +371,17 @@ const RoundSettingsModalGranting = ({ currentGroup }) => {
                 primary={intl.formatMessage({
                   defaultMessage: "Accept direct funding",
                 })}
-                secondary={round.directFundingEnabled?.toString() ?? "false"}
+                secondary={
+                  !round.stripeIsConfigured
+                    ? intl.formatMessage({
+                        defaultMessage: "Stripe not configured",
+                      })
+                    : round.directFundingEnabled?.toString() ?? "false"
+                }
                 isSet={round.directFundingEnabled}
                 openModal={() => handleOpen("SET_DIRECT_FUNDING")}
                 canEdit={canEditSettings}
+                disabled={!round.stripeIsConfigured}
                 roundColor={round.color}
               />
             </>

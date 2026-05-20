@@ -158,6 +158,15 @@ model RoundMember {
   allocatedBy       Allocation[]   @relation("allocatedBy")
   favoriteBuckets   FavoriteBucket[]
 
+  dreamReviews         DreamReview[]
+  dreamReviewComments  DreamReviewComment[]
+  freudHearts          FreudHeart[]
+  freudSnapshots       FreudSnapshot[]
+  freudOverrides       FreudOverride[]
+  batchEmailsSent      BatchEmail[]
+  conversationsCreated Conversation[]
+  conversationMessages ConversationMessage[]
+
   incomingAccount   Account? @relation(name: "incoming", fields: [incomingAccountId], references: [id])
   statusAccount     Account? @relation(name: "status", fields: [statusAccountId], references: [id])
   outgoingAccount   Account? @relation(name: "outgoing", fields: [outgoingAccountId], references: [id])
@@ -194,6 +203,8 @@ model Group {
   registrationPolicy RegistrationPolicy? @default(OPEN)
   visibility         Visibility?         @default(PUBLIC)
 
+  instanceSettings InstanceSettings?
+
   @@map("Organization")
 }
 
@@ -206,6 +217,7 @@ model Round {
   title       String
   archived    Boolean @default(false)
   deleted     Boolean @default(false)
+  position    Float?
 
   info               String?
   about              String?
@@ -236,6 +248,11 @@ model Round {
   ocVerified                Boolean?   @default(false)
   ocToken                   String?
 
+  globalBurnInstanceUrl String?
+  globalBurnEventId     String?
+  globalBurnApiKey      String?
+  globalBurnVerified    Boolean? @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -252,8 +269,32 @@ model Round {
   maxMembers      Int?
   maxFreeBuckets  Int?
 
+  welcomeEmailSubject String?
+  welcomeEmailBody    String?
+
+  freudTotalBudget Int? @map("freud_total_budget")
+
+  dreamReviewTags DreamReviewTag[]
+  freudSnapshots  FreudSnapshot[]
+  freudOverrides  FreudOverride[]
+  batchEmails     BatchEmail[]
+  conversations   Conversation[]
+
+  resultsSnapshot RoundResultsSnapshot?
+
   @@unique([groupId, slug])
   @@map("Collection")
+}
+
+model RoundResultsSnapshot {
+  id            String   @id @default(cuid())
+  round         Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId       String   @unique @map("collectionId")
+  payload       Json
+  schemaVersion Int      @default(1)
+  computedAt    DateTime @default(now())
+
+  @@index([computedAt])
 }
 
 model Tag {
@@ -373,6 +414,13 @@ model Bucket {
 
   percentageFunded  Float?         @default(0)
   contributionsCount Int?          @default(0)
+
+  dreamReviewTags     DreamReviewTag[] @relation("BucketDreamReviewTags")
+  dreamReviews        DreamReview[]
+  dreamReviewComments DreamReviewComment[]
+  freudHearts         FreudHeart[]
+  freudOverrides      FreudOverride[]
+  conversations       Conversation[]   @relation("ConversationBuckets")
 }
 
 model FavoriteBucket {
@@ -406,6 +454,7 @@ model BudgetItem {
   min         Int
   max         Int?
   type        BudgetItemType
+  position    Int            @default(0)
   Bucket      Bucket?        @relation(fields: [bucketId], references: [id])
   bucketId    String?
 }
@@ -544,4 +593,156 @@ model SuperAdminSession {
   end       DateTime?
   duration  Int
   adminId   String
+}
+
+model InstanceSettings {
+  id                        String   @id @default("singleton")
+  landingGroupId            String?  @unique @map("landing_group_id")
+  landingGroup              Group?   @relation(fields: [landingGroupId], references: [id])
+  allowOrganizationCreation Boolean  @default(true) @map("allow_organization_creation")
+  maintenanceMode           Boolean  @default(false) @map("maintenance_mode")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  @@map("instance_settings")
+}
+
+// ═══════════════════════════════════════════
+// FREUD - Dream Review
+// ═══════════════════════════════════════════
+
+model DreamReviewTag {
+  id        String   @id @default(cuid())
+  value     String
+  color     String   @default("#6B7280")
+  roundId   String   @map("collection_id")
+  round     Round    @relation(fields: [roundId], references: [id])
+  buckets   Bucket[] @relation("BucketDreamReviewTags")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([roundId, value])
+  @@map("dream_review_tags")
+}
+
+model DreamReview {
+  id         String      @id @default(cuid())
+  bucketId   String      @map("bucket_id")
+  bucket     Bucket      @relation(fields: [bucketId], references: [id])
+  reviewerId String      @map("reviewer_id")
+  reviewer   RoundMember @relation(fields: [reviewerId], references: [id])
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@unique([bucketId, reviewerId])
+  @@map("dream_reviews")
+}
+
+model DreamReviewComment {
+  id        String      @id @default(cuid())
+  bucketId  String      @map("bucket_id")
+  bucket    Bucket      @relation(fields: [bucketId], references: [id])
+  authorId  String      @map("author_id")
+  author    RoundMember @relation(fields: [authorId], references: [id])
+  content   String
+  verdict   String?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("dream_review_comments")
+}
+
+// ═══════════════════════════════════════════
+// FREUD - Redistribution
+// ═══════════════════════════════════════════
+
+model FreudHeart {
+  id        String      @id @default(cuid())
+  bucketId  String      @map("bucket_id")
+  bucket    Bucket      @relation(fields: [bucketId], references: [id])
+  memberId  String      @map("member_id")
+  member    RoundMember @relation(fields: [memberId], references: [id])
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@unique([bucketId, memberId])
+  @@map("freud_hearts")
+}
+
+model FreudSnapshot {
+  id          String      @id @default(cuid())
+  roundId     String      @map("collection_id")
+  round       Round       @relation(fields: [roundId], references: [id])
+  algorithm   String
+  data        Json
+  createdById String      @map("created_by_id")
+  createdBy   RoundMember @relation(fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@map("freud_snapshots")
+}
+
+model FreudOverride {
+  id           String      @id @default(cuid())
+  roundId      String      @map("collection_id")
+  round        Round       @relation(fields: [roundId], references: [id])
+  bucketId     String      @map("bucket_id")
+  bucket       Bucket      @relation(fields: [bucketId], references: [id])
+  type         String
+  manualAmount Int?        @map("manual_amount")
+  updatedById  String      @map("updated_by_id")
+  updatedBy    RoundMember @relation(fields: [updatedById], references: [id])
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@unique([roundId, bucketId])
+  @@map("freud_overrides")
+}
+
+// ═══════════════════════════════════════════
+// FREUD - Batch Emails
+// ═══════════════════════════════════════════
+
+model BatchEmail {
+  id             String      @id @default(cuid())
+  roundId        String      @map("collection_id")
+  round          Round       @relation(fields: [roundId], references: [id])
+  subject        String
+  summary        String?
+  message        String
+  sentById       String      @map("sent_by_id")
+  sentBy         RoundMember @relation(fields: [sentById], references: [id])
+  recipientCount Int         @map("recipient_count")
+  recipients     Json
+  bucketIds      String[]    @map("bucket_ids")
+  sentAt         DateTime    @default(now()) @map("sent_at")
+
+  @@map("batch_emails")
+}
+
+// ═══════════════════════════════════════════
+// FREUD - Conversations
+// ═══════════════════════════════════════════
+
+model Conversation {
+  id          String                @id @default(cuid())
+  title       String
+  roundId     String                @map("collection_id")
+  round       Round                 @relation(fields: [roundId], references: [id])
+  createdById String                @map("created_by_id")
+  createdBy   RoundMember           @relation(fields: [createdById], references: [id])
+  buckets     Bucket[]              @relation("ConversationBuckets")
+  messages    ConversationMessage[]
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String       @id @default(cuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  authorId       String       @map("author_id")
+  author         RoundMember  @relation(fields: [authorId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("conversation_messages")
 }

@@ -12,6 +12,7 @@ import IconButton from "components/IconButton";
 import { EditIcon } from "components/Icons";
 import Markdown from "./Markdown";
 import { FormattedMessage, useIntl } from "react-intl";
+import { markdownVisibleLength } from "../utils/markdownLength";
 
 const EditableField = ({
   defaultValue,
@@ -40,11 +41,13 @@ const EditableField = ({
   const intl = useIntl();
 
   const schema = useMemo(() => {
+    const limit = maxLength ?? Infinity;
     const maxField = yup
       .string()
-      .max(
-        maxLength ?? Infinity,
-        intl.formatMessage({ defaultMessage: "Too long" })
+      .test(
+        "markdown-max",
+        intl.formatMessage({ defaultMessage: "Too long" }),
+        (value) => !value || markdownVisibleLength(value) <= limit
       );
     return yup.object().shape({
       [name]: required ? maxField.required("Required") : maxField,

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - prod
+      - borderland
 
 jobs:
   production:
@@ -24,4 +25,4 @@ jobs:
       - name: Run migrations
         run: cd ui && yarn prisma migrate deploy
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ github.ref_name == 'borderland' && secrets.BORDERLAND_DATABASE_URL || secrets.DATABASE_URL }}

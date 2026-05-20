@@ -15,13 +15,14 @@ function Expenses({ bucket, round, currentUser }) {
 
   const handleSubmitExpense = async () => {
     if (round.ocCollective) {
-      window.open(
-        `http://opencollective.com/${
-          round.ocCollective.slug
-        }/expenses/new?customData=${JSON.stringify({
+      const customData = encodeURIComponent(
+        JSON.stringify({
           b: bucket.id,
           u: currentUser?.currentCollMember?.id,
-        })}`,
+        })
+      );
+      window.open(
+        `https://opencollective.com/${round.ocCollective.slug}/expenses/new?forceLegacyFlow=1&customData=${customData}`,
         "_blank"
       );
     } else {

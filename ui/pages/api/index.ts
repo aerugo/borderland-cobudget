@@ -1,4 +1,6 @@
 import { ApolloServer } from "apollo-server-micro";
+import { ApolloServerPluginLandingPageLocalDefault } from "apollo-server-core";
+import { json } from "micro";
 import cors from "cors";
 import prisma from "../../server/prisma";
 import schema from "../../server/graphql/schema";
@@ -32,9 +34,15 @@ const corsOptions = {
 
 subscribers.initialize(EventHub);
 
+const introspectionEnabled = process.env.GRAPHQL_INTROSPECTION === "true";
+
 const apolloServer = new ApolloServer({
   typeDefs: schema,
   resolvers,
+  introspection: introspectionEnabled,
+  plugins: introspectionEnabled
+    ? [ApolloServerPluginLandingPageLocalDefault({ embed: true })]
+    : [],
   context: async ({ req, res }): Promise<GraphQLContext> => {
     const { user } = req;
     // 'ss' is SuperAdminSession
@@ -74,6 +82,40 @@ export default handler()
     if (!apolloHandler) {
       res.status(500).json({ error: "Apollo Server not initialized" });
       return;
+    }
+
+    // Vercel's proxy intermittently forwards POST requests without a
+    // Content-Length header. apollo-server-micro@3 (microApollo.js)
+    // gates body parsing on `req.headers['content-length']`, so when
+    // that header is missing it skips the body, runHttpQuery sees no
+    // query, and returns a 400 with "POST body missing, invalid
+    // Content-Type, or JSON object has no keys.". Pre-parse the body
+    // ourselves and stash it on `req.filePayload`, which the same
+    // microApollo handler treats as a pre-supplied query (skipping
+    // its own content-length check entirely).
+    const reqAny = req as any;
+    if (
+      req.method === "POST" &&
+      !reqAny.filePayload &&
+      typeof req.headers["content-type"] === "string" &&
+      req.headers["content-type"].includes("application/json")
+    ) {
+      try {
+        reqAny.filePayload = await json(req);
+      } catch (_e) {
+        // Body was empty/malformed; let Apollo respond with its own error.
+      }
+    }
+
+    // Enable edge caching for anonymous GraphQL queries
+    // Anonymous users don't have a session cookie, so we can cache their responses
+    const isAnonymous = !req.cookies?.session;
+    if (isAnonymous && req.method === "POST") {
+      // Cache at Vercel Edge for 60 seconds, serve stale for 5 minutes while revalidating
+      res.setHeader(
+        "Cache-Control",
+        "public, s-maxage=60, stale-while-revalidate=300"
+      );
     }
 
     return apolloHandler(req, res);

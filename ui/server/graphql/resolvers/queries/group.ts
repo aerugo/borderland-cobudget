@@ -1,6 +1,6 @@
 import prisma from "../../../prisma";
 import { combineResolvers } from "graphql-resolvers";
-import { isGroupAdmin, isRootAdmin } from "../auth";
+import { isGroupAdmin } from "../auth";
 import { sign } from "server/utils/jwt";
 import { appLink } from "utils/internalLinks";
 import { getGroup } from "server/controller";
@@ -20,9 +20,13 @@ export const group = async (parent, { groupSlug }, { user, ss }) => {
   return null;
 };
 
-export const groups = combineResolvers(isRootAdmin, async (parent, args) => {
+export const groups = async (parent, args, { user, ss }) => {
+  // Allow root admin or active super admin session
+  if (!ss && !(user && user.isRootAdmin)) {
+    throw new Error("You need to be root admin or have an active super admin session");
+  }
   return prisma.group.findMany();
-});
+};
 
 export const adminGroups = async (_1, _2, { user }) => {
   const groupMemberships = await prisma.groupMember.findMany({
@@ -100,42 +104,65 @@ export const categories = async (parent, { groupId }) => {
 
 export const balances = async (parent, { groupSlug }, { user }) => {
   try {
+    if (!user?.id) return [];
+
     const group = await prisma.group.findFirst({
+      where: { slug: groupSlug },
+    });
+
+    if (!group) {
+      return { error: "Group not found" };
+    }
+
+    const rounds = await prisma.round.findMany({
+      where: { groupId: group.id },
+      select: { id: true },
+    });
+    const roundIds = rounds.map((r) => r.id);
+
+    if (roundIds.length === 0) {
+      return [];
+    }
+
+    const memberships = await prisma.roundMember.findMany({
       where: {
-        slug: groupSlug,
+        userId: user.id,
+        roundId: { in: roundIds },
       },
     });
-    if (group) {
-      const rounds = await prisma.round.findMany({
-        where: {
-          groupId: group.id,
-        },
-      });
-      const roundIds = rounds.map((r) => r.id);
 
-      if (roundIds.length === 0) {
-        return [];
-      }
-
-      const memberships = await prisma.roundMember.findMany({
-        where: {
-          userId: user?.id,
-          roundId: { in: roundIds },
-        },
-      });
-
-      const balancePromises = memberships.map((m) => getRoundMemberBalance(m));
-      const balances = await Promise.all(balancePromises);
-
-      return balances.map(({ balance, roundId }, i) => ({
-        balance,
-        roundId,
-      }));
-    } else {
-      return {
-        error: "Group not found",
-      };
+    if (memberships.length === 0) {
+      return [];
     }
+
+    const memberIds = memberships.map((m) => m.id);
+
+    // Batch fetch allocations and contributions using groupBy instead of per-member queries
+    const [allocations, contributions] = await Promise.all([
+      prisma.allocation.groupBy({
+        by: ["roundMemberId"],
+        where: { roundMemberId: { in: memberIds } },
+        _sum: { amount: true },
+      }),
+      prisma.contribution.groupBy({
+        by: ["roundMemberId"],
+        where: { roundMemberId: { in: memberIds } },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const allocationMap = new Map(
+      allocations.map((a) => [a.roundMemberId, a._sum.amount || 0])
+    );
+    const contributionMap = new Map(
+      contributions.map((c) => [c.roundMemberId, c._sum.amount || 0])
+    );
+
+    return memberships.map((m) => ({
+      roundId: m.roundId,
+      balance:
+        (allocationMap.get(m.id) || 0) - (contributionMap.get(m.id) || 0),
+    }));
   } catch (err) {
     return [];
   }

@@ -15,6 +15,7 @@ import { BUCKETS_QUERY } from "pages/[group]/[round]";
 import { BUCKET_QUERY } from "pages/[group]/[round]/[bucket]";
 import { GROUP_PAGE_QUERY } from "components/Group";
 import { CURRENT_USER_QUERY } from "pages/_app";
+import { FREUD_DATA_QUERY } from "components/Freud/Redistribution/RedistributionPage";
 
 export const getUrl = (): string => {
   if (typeof window !== "undefined") return `/api`;
@@ -32,10 +33,13 @@ export const getUrl = (): string => {
 export const client = (
   ssrExchange: SSRExchange
   //ctx: NextUrqlContext | undefined
-): { url: string; exchanges: Exchange[] } => {
+): { url: string; exchanges: Exchange[]; fetchOptions: RequestInit } => {
   return {
     url: getUrl(),
     // requestPolicy: "cache-and-network",
+    fetchOptions: {
+      credentials: "include" as RequestCredentials,
+    },
     exchanges: [
       // errorExchange({
       //   // onError: (error) => {
@@ -58,6 +62,11 @@ export const client = (
           ResourceLimit: () => null,
           OC_Collective: () => null,
           OC_Parent: () => null,
+          FreudBucketData: () => null,
+          FreudReviewer: () => null,
+          FreudReviewAction: () => null,
+          InstanceSettings: () => null,
+          GroupSubscriptionStatus: () => null,
         },
         updates: {
           Mutation: {
@@ -69,6 +78,18 @@ export const client = (
                   cache.invalidate(
                     "Query",
                     "getSuperAdminSession",
+                    field.arguments
+                  );
+                });
+            },
+            updateInstanceSettings(result, args, cache) {
+              cache
+                .inspectFields("Query")
+                .filter((field) => field.fieldName === "instanceSettings")
+                .forEach((field) => {
+                  cache.invalidate(
+                    "Query",
+                    "instanceSettings",
                     field.arguments
                   );
                 });
@@ -106,6 +127,15 @@ export const client = (
                 });
             },
             bulkAllocate(result: any, args, cache) {
+              cache
+                .inspectFields("Query")
+                .filter((field) => field.fieldName === "membersPage")
+                .forEach((field) => {
+                  cache.invalidate("Query", "membersPage", field.arguments);
+                });
+            },
+            bulkAllocateToGlobalBurnMembers(_result: any, args: any, cache) {
+              if (args?.dryRun) return;
               cache
                 .inspectFields("Query")
                 .filter((field) => field.fieldName === "membersPage")
@@ -401,19 +431,7 @@ export const client = (
                 .inspectFields("Query")
                 .filter((field) => field.fieldName === "bucketsPage")
                 .forEach((field) => {
-                  cache.updateQuery(
-                    {
-                      query: BUCKETS_QUERY,
-                      variables: field.arguments,
-                    },
-                    (data: any) => {
-                      if (!data?.bucketsPage?.buckets) return data;
-                      data.bucketsPage.buckets = data.bucketsPage.buckets.filter(
-                        (bucket) => bucket.id !== bucketId
-                      );
-                      return data;
-                    }
-                  );
+                  cache.invalidate("Query", "bucketsPage", field.arguments);
                 });
             },
             createExpense(result: any, args, cache) {
@@ -426,6 +444,20 @@ export const client = (
                 .forEach((field) => {
                   cache.invalidate("Query", "bucket", field.arguments);
                 });
+            },
+            editBucket(result: any, args, cache) {
+              // Invalidate bucket query when budgetItems are updated
+              if (args.budgetItems) {
+                cache
+                  .inspectFields("Query")
+                  .filter((field) => field.fieldName === "bucket")
+                  .filter((field) => {
+                    return field.arguments?.id === args.bucketId;
+                  })
+                  .forEach((field) => {
+                    cache.invalidate("Query", "bucket", field.arguments);
+                  });
+              }
             },
             addComment(result: any, { content, bucketId }, cache) {
               if (result.addComment) {
@@ -533,6 +565,168 @@ export const client = (
                   cache.invalidate("Query", "membersPage", field.arguments);
                 });
             },
+            syncGlobalBurnMembers(result: any, _args, cache) {
+              // Only invalidate on a real sync (dryRun=false actually writes
+              // members). The response shape is identical either way, so we
+              // check whether the mutation was called with dryRun=true.
+              if (_args?.dryRun) return;
+              cache
+                .inspectFields("Query")
+                .filter((field) => field.fieldName === "membersPage")
+                .forEach((field) => {
+                  cache.invalidate("Query", "membersPage", field.arguments);
+                });
+            },
+            // FREUD cache invalidation
+            createDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTags" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            deleteDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTags" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            addDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            removeDreamReviewTag(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            addDreamReviewer(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            removeDreamReviewer(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            createDreamReviewComment(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            deleteDreamReviewComment(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "dreamReviewComments" || f.fieldName === "dreamReviewTable")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            toggleFreudHeart(result: any, args: any, cache) {
+              const newHearts = result?.toggleFreudHeart;
+              if (!Array.isArray(newHearts)) return;
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudData")
+                .forEach((f) => {
+                  cache.updateQuery(
+                    { query: FREUD_DATA_QUERY, variables: f.arguments },
+                    (data: any) => {
+                      if (!data?.freudData) return data;
+                      return {
+                        ...data,
+                        freudData: data.freudData.map((bd: any) =>
+                          bd?.bucket?.id === args.bucketId
+                            ? { ...bd, hearts: newHearts }
+                            : bd
+                        ),
+                      };
+                    }
+                  );
+                });
+            },
+            saveFreudSnapshot(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudSnapshots")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            setFreudOverride(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudOverrides")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            clearFreudOverride(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "freudOverrides")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            setFreudTotalBudget(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "round")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            sendBatchEmail(_result, _args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "batchEmails")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+            },
+            createConversation(result: any, _args, cache) {
+              // Invalidate the round-wide conversations list.
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "conversations")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+
+              // Invalidate the legacy per-bucket query for every linked bucket.
+              const linkedBuckets: Array<{ id: string }> =
+                result?.createConversation?.buckets ?? [];
+              const linkedIds = new Set(linkedBuckets.map((b) => b.id));
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "bucketConversations")
+                .forEach((f) => {
+                  const bucketId = (f.arguments as any)?.bucketId;
+                  if (typeof bucketId === "string" && linkedIds.has(bucketId)) {
+                    cache.invalidate("Query", f.fieldName, f.arguments);
+                  }
+                });
+
+              // Invalidate the new per-bucket fields so the tab list and badge refresh.
+              for (const b of linkedBuckets) {
+                cache.invalidate(
+                  { __typename: "Bucket", id: b.id } as any,
+                  "privateConversations"
+                );
+                cache.invalidate(
+                  { __typename: "Bucket", id: b.id } as any,
+                  "noOfPrivateConversations"
+                );
+              }
+            },
+            addConversationMessage(_result, args, cache) {
+              cache.inspectFields("Query")
+                .filter((f) => f.fieldName === "conversation")
+                .forEach((f) => cache.invalidate("Query", f.fieldName, f.arguments));
+
+              // The message mutation result does not include the parent conversation's
+              // bucket list, so walk the cached FreudConversation entity to find them.
+              const convId = (args as any)?.conversationId;
+              if (typeof convId === "string") {
+                const bucketsRef = cache.resolve(
+                  { __typename: "FreudConversation", id: convId } as any,
+                  "buckets"
+                ) as any[] | null;
+                if (Array.isArray(bucketsRef)) {
+                  for (const ref of bucketsRef) {
+                    const bucketId = cache.resolve(ref, "id") as string | null;
+                    if (typeof bucketId === "string") {
+                      cache.invalidate(
+                        { __typename: "Bucket", id: bucketId } as any,
+                        "privateConversations"
+                      );
+                      cache.invalidate(
+                        { __typename: "Bucket", id: bucketId } as any,
+                        "noOfPrivateConversations"
+                      );
+                    }
+                  }
+                }
+              }
+            },
+
             contribute(result, args, cache) {
               const queryFields = cache.inspectFields("Query");
 
@@ -570,6 +764,72 @@ export const client = (
 
               cache.invalidate("Query", "currentUser");
             },
+          },
+        },
+        optimistic: {
+          toggleFreudHeart: (args: any, cache) => {
+            // currentUser is queried with {roundSlug, groupSlug} variables in
+            // _app.tsx; the optimistic handler doesn't know those, so scan
+            // every cached invocation until one resolves a currentCollMember.
+            let currentUser: any = null;
+            cache.inspectFields("Query")
+              .filter((f) => f.fieldName === "currentUser")
+              .some((f) => {
+                const data: any = cache.readQuery({
+                  query: CURRENT_USER_QUERY,
+                  variables: f.arguments,
+                });
+                if (data?.currentUser?.currentCollMember?.id) {
+                  currentUser = data.currentUser;
+                  return true;
+                }
+                return false;
+              });
+            const memberId = currentUser?.currentCollMember?.id;
+            if (!memberId) return null;
+
+            let predictedHearts: any = null;
+            cache.inspectFields("Query")
+              .filter((f) => f.fieldName === "freudData")
+              .some((f) => {
+                const data: any = cache.readQuery({
+                  query: FREUD_DATA_QUERY,
+                  variables: f.arguments,
+                });
+                const bd = data?.freudData?.find(
+                  (b: any) => b?.bucket?.id === args.bucketId
+                );
+                if (!bd) return false;
+                const existing = bd.hearts ?? [];
+                const has = existing.some(
+                  (h: any) => h?.member?.id === memberId
+                );
+                if (has) {
+                  predictedHearts = existing.filter(
+                    (h: any) => h?.member?.id !== memberId
+                  );
+                } else {
+                  predictedHearts = [
+                    ...existing,
+                    {
+                      __typename: "FreudHeart",
+                      id: `optimistic-${memberId}-${args.bucketId}`,
+                      member: {
+                        __typename: "RoundMember",
+                        id: memberId,
+                        user: {
+                          __typename: "User",
+                          id: currentUser.id,
+                          username: currentUser.username,
+                          name: currentUser.name,
+                        },
+                      },
+                    },
+                  ];
+                }
+                return true;
+              });
+            return predictedHearts ?? [];
           },
         },
       }),

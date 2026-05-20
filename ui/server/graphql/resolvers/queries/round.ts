@@ -20,6 +20,7 @@ import {
 } from "../../../../constants";
 import { getExchangeRates } from "../helpers/getExchangeRate";
 import { getOCToken } from "server/utils/roundUtils";
+import { getRoundResults } from "server/services/RoundResultsService";
 
 export const rounds = async (parent, { limit, groupSlug }, { user }) => {
   if (!groupSlug) return null;
@@ -38,6 +39,7 @@ export const rounds = async (parent, { limit, groupSlug }, { user }) => {
     return prisma.round.findMany({
       where: { group: { slug: groupSlug }, deleted: { not: true } },
       take: limit,
+      orderBy: [{ position: "asc" }, { createdAt: "desc" }],
     });
   }
 
@@ -48,6 +50,7 @@ export const rounds = async (parent, { limit, groupSlug }, { user }) => {
       deleted: { not: true },
     },
     take: limit,
+    orderBy: [{ position: "asc" }, { createdAt: "desc" }],
   });
 
   // filter away colls the current user shouldn't be able to view
@@ -179,6 +182,18 @@ export const roundTransactions = combineResolvers(
   }
 );
 
+export const roundResults = async (
+  parent,
+  { roundId },
+  { user, ss }
+) => {
+  const round = await prisma.round.findUnique({ where: { id: roundId } });
+  if (!round) return null;
+  const allowed = ss || (await canViewRound({ round, user }));
+  if (!allowed) return null;
+  return getRoundResults(roundId);
+};
+
 export const members = combineResolvers(
   isCollMemberOrGroupAdmin,
   async (parent, { roundId, isApproved }) => {
@@ -229,12 +244,47 @@ export const membersPage = combineResolvers(
       },
       take: limit + 1,
       skip: offset,
-      ...(search && { include: { user: true } }),
+      include: { user: true }, // Always include user to avoid N+1
     });
+
+    const members = roundMembersWithExtra.slice(0, limit);
+    const memberIds = members.map((m) => m.id);
+
+    // Batch query allocations and contributions for balance calculation
+    const [allocations, contributions] = await Promise.all([
+      prisma.allocation.groupBy({
+        by: ["roundMemberId"],
+        where: { roundMemberId: { in: memberIds } },
+        _sum: { amount: true },
+      }),
+      prisma.contribution.groupBy({
+        by: ["roundMemberId"],
+        where: { roundMemberId: { in: memberIds }, deleted: { not: true } },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    // Build balance map
+    const balanceMap = new Map<string, number>();
+    allocations.forEach((a) => {
+      balanceMap.set(a.roundMemberId, a._sum.amount || 0);
+    });
+    contributions.forEach((c) => {
+      const current = balanceMap.get(c.roundMemberId) || 0;
+      balanceMap.set(c.roundMemberId, current - (c._sum.amount || 0));
+    });
+
+    // Attach pre-computed balance to members
+    const membersWithBalance = members.map((m) => ({
+      ...m,
+      _computed: {
+        balance: balanceMap.get(m.id) || 0,
+      },
+    }));
 
     return {
       moreExist: roundMembersWithExtra.length > limit,
-      members: roundMembersWithExtra.slice(0, limit),
+      members: membersWithBalance,
     };
   }
 );
@@ -287,32 +337,31 @@ export const exchangeRates = async (_, { currencies }) => {
   return response;
 };
 
-export const expensesCount = async (_, { roundId }, { user }) => {
-  const roundMember = await prisma.roundMember.findUnique({
-    where: {
-      userId_roundId: {
-        userId: user.id,
-        roundId,
-      },
-    },
-    include: {
-      round: {
-        select: {
-          openCollectiveId: true,
-          openCollectiveProjectId: true,
-          ocVerified: true,
-          ocToken: true,
-          currency: true,
-        },
-      },
+export const expensesCount = async (_, { roundId }, { user, ss }) => {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: {
+      openCollectiveId: true,
+      openCollectiveProjectId: true,
+      ocVerified: true,
+      ocToken: true,
+      currency: true,
     },
   });
 
-  const isAdmin = roundMember.isAdmin;
-  const round = roundMember.round;
+  if (!ss) {
+    const roundMember = await prisma.roundMember.findUnique({
+      where: {
+        userId_roundId: {
+          userId: user.id,
+          roundId,
+        },
+      },
+    });
 
-  if (!isAdmin) {
-    throw new Error(GRAPHQL_ADMIN_ONLY);
+    if (!roundMember?.isAdmin) {
+      throw new Error(GRAPHQL_ADMIN_ONLY);
+    }
   }
 
   if (!round.openCollectiveId) {
@@ -328,6 +377,10 @@ export const expensesCount = async (_, { roundId }, { user }) => {
     round.openCollectiveProjectId,
     getOCToken(round)
   );
+
+  if (!collective?.slug) {
+    throw new Error("Failed to fetch collective from Open Collective");
+  }
 
   return getExpensesCount(collective.slug, getOCToken(round));
 };

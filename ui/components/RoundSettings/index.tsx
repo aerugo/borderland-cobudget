@@ -13,8 +13,10 @@ import Tags from "./Tags";
 import BucketReview from "./BucketReview";
 import Discourse from "./Discourse";
 import Integrations from "./Integrations";
+import InviteMembers from "./InviteMembers";
 import AppContext from "contexts/AppContext";
 import GroupSettings from "./GroupSettings";
+import WelcomeEmail from "./WelcomeEmail";
 import RoundSuperAdmin from "./SuperAdmin";
 
 const RoundSettings = ({
@@ -62,6 +64,11 @@ const RoundSettings = ({
         component: Guidelines,
       },
       {
+        slug: "welcome-email",
+        name: intl.formatMessage({ defaultMessage: "Welcome Email" }),
+        component: WelcomeEmail,
+      },
+      {
         slug: "bucket-review",
         name: intl.formatMessage(
           {
@@ -95,6 +102,11 @@ const RoundSettings = ({
         slug: "integrations",
         name: intl.formatMessage({ defaultMessage: "Integrations" }),
         component: Integrations,
+      },
+      {
+        slug: "invite-members",
+        name: intl.formatMessage({ defaultMessage: "Invite members" }),
+        component: InviteMembers,
       },
       {
         slug: "group",

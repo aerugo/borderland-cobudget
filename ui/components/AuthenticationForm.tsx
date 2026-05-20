@@ -54,8 +54,16 @@ export default function AuthenticationForm({
             `/check-mailbox?e=${encodeURIComponent(email)}&c=${json.code}`
           );
         } else {
-          toast.error(json.error);
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message || "Something went wrong";
+          toast.error(message);
         }
+      })
+      .catch(() => {
+        setLoading(false);
+        toast.error("Something went wrong. Please try again.");
       });
   };
 

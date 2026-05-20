@@ -111,6 +111,30 @@ const RoundMembers = ({ round, currentUser }) => {
           />
         )}
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow px-5 py-4">
+            <div className="text-xs uppercase tracking-wide text-gray-500 font-medium">
+              <FormattedMessage defaultMessage="Participants" />
+            </div>
+            <div className="text-2xl font-semibold text-gray-900 mt-1">
+              <FormattedNumber value={round.numberOfApprovedMembers ?? 0} />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow px-5 py-4">
+            <div className="text-xs uppercase tracking-wide text-gray-500 font-medium">
+              <FormattedMessage defaultMessage="Total remaining balance" />
+            </div>
+            <div className="text-2xl font-semibold text-gray-900 mt-1">
+              <FormattedNumber
+                value={(Number(round.totalInMembersBalances) || 0) / 100}
+                style="currency"
+                currencyDisplay="symbol"
+                currency={round.currency}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-between mb-3 items-center">
           <SearchBar
             color={round.color}

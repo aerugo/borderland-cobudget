@@ -56,6 +56,7 @@ const schema = gql`
   type Query {
     getSuperAdminSession: SuperAdminSession
     getSuperAdminSessions(limit: Int!, offset: Int!): superAdminSessionsPage
+    instanceSettings: InstanceSettings
     currentUser: User
     user(userId: ID!): User!
     groups: [Group!]
@@ -90,6 +91,7 @@ const schema = gql`
       status: [StatusType!]
       orderBy: String
       orderDir: String
+      pinnedOnly: Boolean
     ): BucketsPage
     starredBuckets(take: Int, skip: Int, roundId: ID): BucketsPage
     languageProgressPage: [LanguageProgress]
@@ -121,7 +123,21 @@ const schema = gql`
       offset: Int
       limit: Int
     ): RoundTransactionPage
+    roundResults(roundId: ID!): RoundResults
     balances(groupSlug: String!): [RoundBalance]
+
+    # FREUD
+    dreamReviewTable(roundId: ID!): [FreudBucketData!]!
+    dreamReviewTags(roundId: ID!): [DreamReviewTag!]!
+    dreamReviewComments(bucketId: ID!): [DreamReviewComment!]!
+    freudData(roundId: ID!): [FreudBucketData!]!
+    freudSnapshots(roundId: ID!): [FreudSnapshot!]!
+    freudOverrides(roundId: ID!): [FreudOverride!]!
+    batchEmails(roundId: ID!): [BatchEmail!]!
+    bucketConversations(bucketId: ID!): [FreudConversation!]!
+    conversations(roundId: ID!): [FreudConversation!]!
+    conversation(id: ID!): FreudConversation
+
     randomRoundImages(
       groupSlug: String!
       roundSlug: String!
@@ -152,6 +168,8 @@ const schema = gql`
 
     endSuperAdminSession: SuperAdminSession
 
+    updateInstanceSettings(landingGroupId: String, allowOrganizationCreation: Boolean, maintenanceMode: Boolean): InstanceSettings
+
     createGroup(
       name: String!
       logo: String
@@ -180,6 +198,17 @@ const schema = gql`
     ): Round!
     verifyOpencollective(roundId: ID!): Round
     editOCToken(roundId: ID!, ocToken: String): Round
+    editGlobalBurnSettings(
+      roundId: ID!
+      instanceUrl: String
+      eventId: String
+      apiKey: String
+    ): Round
+    testGlobalBurnConnection(roundId: ID!): GlobalBurnConnectionResult!
+    syncGlobalBurnMembers(
+      roundId: ID!
+      dryRun: Boolean!
+    ): GlobalBurnSyncResult!
     editRound(
       roundId: ID!
       slug: String
@@ -194,7 +223,10 @@ const schema = gql`
       discourseCategoryId: Int
       ocCollectiveSlug: String
       ocProjectSlug: String
+      welcomeEmailSubject: String
+      welcomeEmailBody: String
     ): Round!
+    sendTestWelcomeEmail(roundId: ID!): Boolean
     resetRoundFunding(roundId: ID!): [Transaction]
     deleteRound(roundId: ID!): Round
 
@@ -234,6 +266,7 @@ const schema = gql`
 
     changeRoundSize(roundId: ID!, maxMembers: Int): Round
     changeBucketLimit(roundId: ID!, maxFreeBuckets: Int): Round
+    setRoundPosition(roundId: ID!, newPosition: Float!): Round!
 
     editBucketCustomField(
       bucketId: ID!
@@ -302,6 +335,9 @@ const schema = gql`
       amount: Int
       attachment: String
     ): ExpenseReceipt
+
+    deleteExpense(id: String!): Expense
+    deleteExpenseReceipt(id: String!): ExpenseReceipt
 
     syncOCExpenses(id: ID!, limit: Int!, offset: Int!): OCSyncResponse
     removeDeletedOCExpenses(id: ID!): OCSyncResponse
@@ -396,6 +432,12 @@ const schema = gql`
       amount: Int!
       type: AllocationType!
     ): [RoundMember]
+    bulkAllocateToGlobalBurnMembers(
+      roundId: ID!
+      amount: Int!
+      type: AllocationType!
+      dryRun: Boolean!
+    ): GlobalBurnAllocationResult!
     contribute(roundId: ID!, bucketId: ID!, amount: Int!): Bucket
 
     cancelFunding(bucketId: ID!): Bucket
@@ -408,6 +450,26 @@ const schema = gql`
     acceptTerms: User
     setEmailSetting(settingKey: String!, value: Boolean!): User
     pinBucket(bucketId: ID!, pin: Boolean!): Bucket
+
+    # FREUD
+    createDreamReviewTag(roundId: ID!, value: String!, color: String): DreamReviewTag!
+    deleteDreamReviewTag(id: ID!): DreamReviewTag!
+    addDreamReviewTag(bucketId: ID!, tagId: ID!): Bucket!
+    removeDreamReviewTag(bucketId: ID!, tagId: ID!): Bucket!
+    addDreamReviewer(bucketId: ID!, reviewerId: ID!): DreamReview!
+    removeDreamReviewer(bucketId: ID!, reviewerId: ID!): Boolean!
+    createDreamReviewComment(bucketId: ID!, content: String!, verdict: String): DreamReviewComment!
+    editDreamReviewComment(id: ID!, content: String!, verdict: String): DreamReviewComment!
+    deleteDreamReviewComment(id: ID!): Boolean!
+    toggleFreudHeart(bucketId: ID!): [FreudHeart!]!
+    saveFreudSnapshot(roundId: ID!, algorithm: String!, data: JSON!): FreudSnapshot!
+    setFreudTotalBudget(roundId: ID!, amount: Int): Round!
+    setFreudOverride(roundId: ID!, bucketId: ID!, type: String!, manualAmount: Int): FreudOverride!
+    clearFreudOverride(roundId: ID!, bucketId: ID!): Boolean!
+    sendBatchEmail(roundId: ID!, subject: String!, summary: String, message: String!, bucketIds: [ID!]!): BatchEmail!
+    createConversation(roundId: ID!, title: String!, bucketIds: [ID!]!, initialMessage: String!): FreudConversation!
+    addConversationMessage(conversationId: ID!, content: String!): ConversationMessage!
+    addBucketsToConversation(conversationId: ID!, bucketIds: [ID!]!): FreudConversation!
   }
 
   type GroupSubscriptionStatus {
@@ -465,6 +527,7 @@ const schema = gql`
     slug: String!
     title: String!
     archived: Boolean
+    position: Float
     group: Group
     info: String
     color: String
@@ -483,6 +546,7 @@ const schema = gql`
     about: String
     allowStretchGoals: Boolean
     stripeIsConnected: Boolean
+    stripeIsConfigured: Boolean
     directFundingEnabled: Boolean
     directFundingTerms: String
     canCocreatorStartFunding: Boolean
@@ -501,14 +565,22 @@ const schema = gql`
     updatedAt: Date
     distributedAmount: Int
     publishedBucketCount: Int
+    previewImages: [ImageFeedEntry]
 
     ocCollective: OC_Collective
     ocWebhookUrl: String
     ocVerified: Boolean
     ocTokenStatus: OC_TokenStatus
+    globalBurnInstanceUrl: String
+    globalBurnEventId: String
+    globalBurnApiKeyStatus: OC_TokenStatus
+    globalBurnVerified: Boolean
     membersLimit: MembersLimit
     bucketsLimit: ResourceLimit
     expenses: [Expense]
+    welcomeEmailSubject: String
+    welcomeEmailBody: String
+    freudTotalBudget: Int
   }
 
   type InvitationLink {
@@ -657,6 +729,38 @@ const schema = gql`
     PROVIDED
   }
 
+  enum GlobalBurnConnectionStatus {
+    OK
+    INVALID_KEY
+    EVENT_NOT_FOUND
+    UNREACHABLE
+  }
+
+  type GlobalBurnConnectionResult {
+    status: GlobalBurnConnectionStatus!
+    memberCount: Int
+    detail: String
+    round: Round
+  }
+
+  type GlobalBurnSyncResult {
+    status: GlobalBurnConnectionStatus!
+    totalInEvent: Int
+    alreadyMembers: Int
+    toInvite: Int
+    detail: String
+    round: Round
+  }
+
+  type GlobalBurnAllocationResult {
+    status: GlobalBurnConnectionStatus!
+    matchedMembers: Int
+    totalApproved: Int
+    totalAmount: Int
+    detail: String
+    round: Round
+  }
+
   type OC_Parent {
     id: String!
     name: String!
@@ -776,6 +880,11 @@ const schema = gql`
     expenses: [Expense]
     expense(id: String!): Expense
     isFavorite: Boolean
+    # FREUD Dream Team private channel — per-viewer scoped.
+    privateConversations: [FreudConversation!]!
+    noOfPrivateConversations: Int!
+    canAccessPrivateConversations: Boolean!
+    canStartPrivateConversation: Boolean!
   }
 
   enum DirectFundingType {
@@ -844,6 +953,7 @@ const schema = gql`
     min: Int!
     max: Int
     type: BudgetItemType!
+    position: Int!
   }
 
   enum BudgetItemType {
@@ -856,6 +966,7 @@ const schema = gql`
     min: Int!
     max: Int
     type: BudgetItemType!
+    position: Int
   }
 
   interface Transaction {
@@ -916,6 +1027,33 @@ const schema = gql`
     transactions(roundId: ID!, offset: Int, limit: Int): [RoundTransaction]
   }
 
+  type BucketResultRow {
+    id: ID!
+    title: String!
+    minGoal: Int!
+    maxGoal: Int!
+    contributionsCount: Int!
+    contributionsSum: Int!
+    contributorsCount: Int!
+    contributionsCountFundedOnly: Int!
+    contributionsSumFundedOnly: Int!
+  }
+
+  type RoundResults {
+    totalContributionsCount: Int!
+    totalContributionsAmount: Int!
+    averageContributionAmount: Float!
+    participationRate: Float!
+    fullParticipationRate: Float!
+    fundedParticipantCount: Int!
+    anySpendParticipantCount: Int!
+    fullySpentParticipantCount: Int!
+    buckets: [BucketResultRow!]!
+    dreamsFundedPerContributor: [Int!]!
+    computedAt: Date!
+    isStale: Boolean!
+  }
+
   # type GrantingPeriod {
   #   round: Event!
   #   submissionCloses: Date
@@ -956,6 +1094,15 @@ const schema = gql`
     end: Date
     adminId: ID!
     user: User
+  }
+
+  type InstanceSettings {
+    id: ID!
+    landingGroupId: String
+    landingGroup: Group
+    allowOrganizationCreation: Boolean
+    maintenanceMode: Boolean
+    updatedAt: Date
   }
 
   input CustomFieldValueInput {
@@ -1065,6 +1212,110 @@ const schema = gql`
   # }
 
   # type Image {}
+
+  # ═══════════════════════════════════════════
+  # FREUD Types
+  # ═══════════════════════════════════════════
+
+  type DreamReviewTag {
+    id: ID!
+    value: String!
+    color: String!
+  }
+
+  type DreamReview {
+    id: ID!
+    reviewer: RoundMember!
+    createdAt: Date!
+  }
+
+  type DreamReviewComment {
+    id: ID!
+    author: RoundMember!
+    content: String!
+    verdict: String
+    createdAt: Date!
+    updatedAt: Date!
+  }
+
+  type FreudHeart {
+    id: ID!
+    member: RoundMember!
+  }
+
+  type FreudReviewAction {
+    type: String!
+    comment: String
+    guidelineTitle: String
+    createdAt: Date!
+  }
+
+  type FreudReviewer {
+    member: RoundMember
+    lastVerdict: String
+    actions: [FreudReviewAction!]!
+  }
+
+  type FreudBucketData {
+    bucket: Bucket!
+    goal: Float!
+    stretch: Float!
+    funded: Float!
+    missing: Float!
+    funders: Int!
+    progress: Float!
+    dreamReviewTags: [DreamReviewTag!]!
+    hearts: [FreudHeart!]!
+    reviewedBy: [FreudReviewer!]!
+    assignedTo: [RoundMember!]!
+    reviewCommentCount: Int!
+  }
+
+  type FreudSnapshot {
+    id: ID!
+    algorithm: String!
+    data: JSON!
+    createdBy: RoundMember!
+    createdAt: Date!
+  }
+
+  type FreudOverride {
+    id: ID!
+    bucketId: ID!
+    type: String!
+    manualAmount: Int
+    updatedBy: RoundMember!
+    updatedAt: Date!
+  }
+
+  type BatchEmail {
+    id: ID!
+    subject: String!
+    summary: String
+    message: String!
+    sentBy: RoundMember!
+    recipientCount: Int!
+    recipients: JSON
+    sentAt: Date!
+  }
+
+  type FreudConversation {
+    id: ID!
+    title: String!
+    buckets: [Bucket!]!
+    messages: [ConversationMessage!]!
+    createdBy: RoundMember!
+    messageCount: Int!
+    lastMessageAt: Date
+    createdAt: Date!
+  }
+
+  type ConversationMessage {
+    id: ID!
+    author: RoundMember!
+    content: String!
+    createdAt: Date!
+  }
 `;
 
 export default schema;

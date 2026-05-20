@@ -1,9 +1,10 @@
 import FormattedCurrency from "components/FormattedCurrency";
-import HappySpinner from "components/HappySpinner";
+import Spinner from "components/Spinner";
+import { BucketGridSkeleton } from "components/BucketCardSkeleton";
 import { HeaderSkeleton } from "components/Skeleton";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import toast from "react-hot-toast";
 import { FormattedMessage, FormattedNumber } from "react-intl";
 import { gql, useMutation, useQuery } from "urql";
@@ -107,7 +108,7 @@ export const PINNED_BUCKETS_QUERY = gql`
       groupSlug: $groupSlug
       roundSlug: $roundSlug
       status: $status
-      limit: 1000
+      pinnedOnly: true
     ) {
       buckets {
         id
@@ -309,15 +310,48 @@ const Page = ({
 
   const moreExist = data?.bucketsPage.moreExist;
   const buckets = data?.bucketsPage.buckets ?? [];
+
+  // Prefetch: use IntersectionObserver to load next page when user scrolls near bottom
+  const prefetchSentinelRef = useRef<HTMLDivElement>(null);
+  const hasTriggeredPrefetch = useRef(false);
+
+  useEffect(() => {
+    // Reset prefetch trigger when page changes
+    hasTriggeredPrefetch.current = false;
+  }, [variables.offset]);
+
+  useEffect(() => {
+    if (!isLastPage || !moreExist || fetching || hasTriggeredPrefetch.current) return;
+
+    const sentinel = prefetchSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !hasTriggeredPrefetch.current) {
+          hasTriggeredPrefetch.current = true;
+          onLoadMore({
+            limit: variables.limit,
+            offset: variables.offset + buckets.length,
+          });
+        }
+      },
+      { rootMargin: "200px" } // Trigger 200px before reaching the sentinel
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isLastPage, moreExist, fetching, buckets.length, variables, onLoadMore]);
+
   let finalBuckets = buckets;
   if (!bucketTableView) {
     if (isFirstPage && pinnedBuckets && pinnedBuckets.length > 0) {
       // On page 1, merge all pinned buckets (fetched separately) with unpinned ones from this page.
-      const unpinned = buckets.filter((b) => b.pinnedAt === null);
+      const unpinned = buckets.filter((b) => b && b.pinnedAt === null);
       finalBuckets = [...pinnedBuckets, ...unpinned];
     } else {
       // On subsequent pages, show only unpinned buckets.
-      finalBuckets = buckets.filter((b) => b.pinnedAt === null);
+      finalBuckets = buckets.filter((b) => b && b.pinnedAt === null);
     }
   }
 
@@ -539,26 +573,16 @@ const Page = ({
             </h1>
           </div>
         ) : (
-          <div className="w-full flex justify-center items-center h-64">
-            <HappySpinner />
-          </div>
-          // <div className="bg-white rounded-lg shadow-md animate-pulse overflow-hidden">
-          //   <div className="bg-anthracit h-48"></div>
-          //   <div className="animate-pulse flex space-x-4 p-4">
-          //     <div className="flex-1 space-y-4 py-1">
-          //       <div className="h-4 bg-gray-400 rounded w-3/4"></div>
-          //       <div className="space-y-2">
-          //         <div className="h-4 bg-gray-400 rounded"></div>
-          //         <div className="h-4 bg-gray-400 rounded w-5/6"></div>
-          //       </div>
-          //     </div>
-          //   </div>
-          // </div>
+          <BucketGridSkeleton count={6} />
         ))}
-      {isLastPage && moreExist && (
+      {/* Invisible sentinel for prefetching - triggers load when scrolled into view */}
+      {isLastPage && moreExist && !fetching && (
+        <div ref={prefetchSentinelRef} className="h-1" aria-hidden="true" />
+      )}
+      {isLastPage && (fetching || moreExist) && (
         <div className="absolute bottom-0 justify-center flex w-full">
           <LoadMore
-            moreExist={moreExist}
+            moreExist={moreExist || fetching}
             loading={fetching}
             onClick={() =>
               onLoadMore({
@@ -566,7 +590,7 @@ const Page = ({
                 offset: variables.offset + buckets.length,
               })
             }
-          />{" "}
+          />
         </div>
       )}
     </>
@@ -604,7 +628,7 @@ const getStandardFilter = (bucketStatusCount) => {
 };
 
 const RoundPage = ({ currentUser }) => {
-  const limit = 12;
+  const limit = 24;
   const [newBucketModalOpen, setNewBucketModalOpen] = useState(false);
   const [bucketTableView, setBucketTableView] = useState(false);
   const [pageVariables, setPageVariables] = useState([
@@ -699,7 +723,7 @@ const RoundPage = ({ currentUser }) => {
     pause: !router.isReady || bucketTableView,
   });
   const pinnedBuckets = (pinnedData?.bucketsPage?.buckets ?? [])
-    .filter((b) => b.pinnedAt !== null)
+    .filter((b) => b && b.pinnedAt !== null)
     .sort(
       (a, b) => new Date(a.pinnedAt).getTime() - new Date(b.pinnedAt).getTime()
     );
@@ -731,7 +755,7 @@ const RoundPage = ({ currentUser }) => {
   if (pause || fetching) {
     return (
       <div className="w-full flex justify-center items-center h-64">
-        <HappySpinner />
+        <Spinner size="lg" className="text-gray-400" />
       </div>
     );
   }
@@ -955,6 +979,16 @@ const RoundPage = ({ currentUser }) => {
       />
     </div>
   );
+};
+
+// Enable edge caching for round pages
+export const getServerSideProps = async ({ res }) => {
+  // Cache at edge for 60s, serve stale for 5min while revalidating
+  res.setHeader(
+    "Cache-Control",
+    "public, s-maxage=60, stale-while-revalidate=300"
+  );
+  return { props: {} };
 };
 
 export default RoundPage;

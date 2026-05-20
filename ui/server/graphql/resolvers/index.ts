@@ -6,7 +6,9 @@ import {
   bucketQueries,
   budgetItemQueries,
   expensesQueries,
+  freudQueries,
   groupQueries,
+  instanceSettingsQueries,
   randomRoundImages,
   roundQueries,
   superAdminQueries,
@@ -32,10 +34,14 @@ import {
   User,
 } from "./types";
 
+import * as FreudConversation from "./types/FreudConversation";
+
 // mutations
 import {
   bucketMutations,
+  freudMutations,
   groupMutations,
+  instanceSettingsMutations,
   roundMutations,
   superAdminMutations,
   userMutations,
@@ -52,6 +58,8 @@ const resolvers = {
     ...budgetItemQueries,
     ...superAdminQueries,
     ...expensesQueries,
+    ...instanceSettingsQueries,
+    ...freudQueries,
     randomRoundImages,
     languageProgressPage,
   },
@@ -62,6 +70,8 @@ const resolvers = {
     ...roundMutations,
     ...bucketMutations,
     ...superAdminMutations,
+    ...instanceSettingsMutations,
+    ...freudMutations,
   },
 
   RoundMember,
@@ -79,6 +89,7 @@ const resolvers = {
   Date,
   Expense,
   SuperAdminSession,
+  FreudConversation,
   JSON: GraphQLJSON,
   JSONObject: GraphQLJSONObject,
   BigInt,

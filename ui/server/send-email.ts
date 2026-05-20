@@ -1,4 +1,5 @@
 import { Client, ServerClient } from "postmark";
+import { LinkTrackingOptions } from "postmark/dist/client/models";
 import prisma from "./prisma";
 export interface SendEmailInput {
   to: string;
@@ -14,6 +15,54 @@ const client =
 const broadcastClient = new ServerClient(
   process.env.POSTMARK_BROADCAST_API_TOKEN
 );
+
+function wrapHtml(bodyHtml: string): string {
+  // Don't double-wrap if already a full HTML document
+  if (bodyHtml.trim().toLowerCase().startsWith("<!doctype") || bodyHtml.trim().toLowerCase().startsWith("<html")) {
+    return bodyHtml;
+  }
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <!--[if mso]>
+  <style>* { font-family: sans-serif !important; }</style>
+  <![endif]-->
+  <style>
+    :root { color-scheme: light; supported-color-schemes: light; }
+    html, body { margin: 0 auto !important; padding: 0 !important; height: 100% !important; width: 100% !important; }
+    * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+    div[style*="margin: 16px 0"] { margin: 0 !important; }
+    table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+    table { border-spacing: 0 !important; border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+    a { color: #1a73e8; }
+    img { -ms-interpolation-mode: bicubic; }
+    .im { color: inherit !important; }
+    @media screen and (max-width: 600px) {
+      .email-container p { font-size: 16px !important; }
+    }
+  </style>
+</head>
+<body width="100%" style="margin: 0; padding: 0 !important; mso-line-height-rule: exactly; background-color: #f4f4f5;">
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; background-color: #f4f4f5;">
+    <div style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);" class="email-container">
+      <table align="center" role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="padding: 32px 36px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 24px; color: #333333;">
+            ${bodyHtml}
+          </td>
+        </tr>
+      </table>
+    </div>
+  </center>
+</body>
+</html>`;
+}
 
 // Note: mailhog SMTP client removed - we now print emails to console in development
 // to avoid connection timeout delays when mailhog isn't running
@@ -43,7 +92,9 @@ const send = async (mail: SendEmailInput) => {
         To: mail.to,
         Subject: mail.subject,
         TextBody: mail.text,
-        HtmlBody: mail.html,
+        HtmlBody: mail.html ? wrapHtml(mail.html) : undefined,
+        TrackOpens: false,
+        TrackLinks: LinkTrackingOptions.None,
       });
     } catch (err) {
       console.log(err);
@@ -78,7 +129,9 @@ const sendBatch = async (mails: SendEmailInput[]) => {
               To: mail.to,
               Subject: mail.subject,
               TextBody: mail.text,
-              HtmlBody: mail.html,
+              HtmlBody: mail.html ? wrapHtml(mail.html) : undefined,
+              TrackOpens: false,
+              TrackLinks: LinkTrackingOptions.None,
             }))
           )
         )
@@ -118,7 +171,7 @@ const broadcastMail = async (mails: SendEmailInput[]) => {
             To: mail.to,
             Subject: mail.subject,
             TextBody: mail.text,
-            HtmlBody: mail.html,
+            HtmlBody: mail.html ? wrapHtml(mail.html) : undefined,
             MessageStream: "broadcast",
           }))
         )

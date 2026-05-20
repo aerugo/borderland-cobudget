@@ -16,12 +16,15 @@ import {
   roundMemberBalance,
   statusTypeToQuery,
   stripeIsConnected,
+  validateOCToken,
 } from "../helpers";
 import { verify } from "server/utils/jwt";
 import emailService from "server/services/EmailService/email.service";
+import { fetchGlobalBurnMembers } from "server/services/GlobalBurnService";
 import { inviteRoundMembersHelper } from "../helpers/inviteRoundMemberHelpers";
 import {
   allocateToMember,
+  allocateToMembers,
   bulkAllocate as bulkAllocateController,
 } from "server/controller";
 import dayjs from "dayjs";
@@ -117,14 +120,173 @@ export const createRound = async (
 export const editOCToken = combineResolvers(
   isCollOrGroupAdmin,
   async (parent, { roundId, ocToken }) => {
-    const { error } = await getCollective({ slug: "cobudget" }, ocToken);
-    if (error?.status === UNAUTHORIZED_STATUS) {
-      throw new Error(UNAUTHORIZED);
+    if (!ocToken || !ocToken.trim()) {
+      throw new Error("Token is required");
+    }
+    const result = await validateOCToken(ocToken);
+    if (result?.error) {
+      if (result.error.status === UNAUTHORIZED_STATUS) {
+        throw new Error(UNAUTHORIZED);
+      }
+      throw new Error("Failed to validate token with Open Collective");
     }
     return prisma.round.update({
       where: { id: roundId },
       data: { ocToken },
     });
+  }
+);
+
+// apiKey tri-state: null/undefined = unchanged, "" = clear, string = set.
+// Any change resets globalBurnVerified so admins must re-test before syncing.
+export const editGlobalBurnSettings = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId, instanceUrl, eventId, apiKey }) => {
+    const data: Prisma.RoundUpdateInput = {};
+
+    if (instanceUrl !== null && instanceUrl !== undefined) {
+      const trimmed = instanceUrl.trim().replace(/\/+$/, "");
+      data.globalBurnInstanceUrl = trimmed === "" ? null : trimmed;
+    }
+    if (eventId !== null && eventId !== undefined) {
+      const trimmed = eventId.trim();
+      data.globalBurnEventId = trimmed === "" ? null : trimmed;
+    }
+    if (apiKey !== null && apiKey !== undefined) {
+      data.globalBurnApiKey = apiKey === "" ? null : apiKey;
+    }
+
+    if (Object.keys(data).length > 0) {
+      data.globalBurnVerified = false;
+    }
+
+    return prisma.round.update({ where: { id: roundId }, data });
+  }
+);
+
+export const testGlobalBurnConnection = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    const verified = result.status === "OK";
+    const updatedRound = await prisma.round.update({
+      where: { id: roundId },
+      data: { globalBurnVerified: verified },
+    });
+
+    return {
+      status: result.status,
+      memberCount: result.status === "OK" ? result.emails.length : null,
+      detail: result.status === "UNREACHABLE" ? result.detail ?? null : null,
+      round: updatedRound,
+    };
+  }
+);
+
+export const syncGlobalBurnMembers = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_parent, { roundId, dryRun }, { user: currentUser }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    if (result.status !== "OK") {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { globalBurnVerified: false },
+      });
+      return {
+        status: result.status,
+        totalInEvent: null,
+        alreadyMembers: null,
+        toInvite: null,
+        detail:
+          result.status === "UNREACHABLE" ? result.detail ?? null : null,
+        round: { ...round, globalBurnVerified: false },
+      };
+    }
+
+    const fetchedEmails = Array.from(new Set(result.emails));
+
+    const existingUsers = await prisma.user.findMany({
+      where: { email: { in: fetchedEmails } },
+      select: { id: true, email: true },
+    });
+    const existingUserIds = existingUsers.map((u) => u.id);
+    const existingRoundMembers =
+      existingUserIds.length > 0
+        ? await prisma.roundMember.findMany({
+            where: { roundId, userId: { in: existingUserIds } },
+            select: { userId: true },
+          })
+        : [];
+    const existingMemberUserIds = new Set(
+      existingRoundMembers.map((rm) => rm.userId)
+    );
+    const alreadyEmailSet = new Set(
+      existingUsers
+        .filter((u) => existingMemberUserIds.has(u.id))
+        .map((u) => u.email)
+    );
+
+    const toInviteEmails = fetchedEmails.filter(
+      (email) => !alreadyEmailSet.has(email)
+    );
+
+    const alreadyCount = fetchedEmails.length - toInviteEmails.length;
+
+    // Make sure verified stays true on successful fetches, even on dry run.
+    const updatedRound = round.globalBurnVerified
+      ? round
+      : await prisma.round.update({
+          where: { id: roundId },
+          data: { globalBurnVerified: true },
+        });
+
+    if (dryRun || toInviteEmails.length === 0) {
+      return {
+        status: "OK",
+        totalInEvent: fetchedEmails.length,
+        alreadyMembers: alreadyCount,
+        toInvite: toInviteEmails.length,
+        detail: null,
+        round: updatedRound,
+      };
+    }
+
+    await inviteRoundMembersHelper({
+      roundId,
+      emailsString: toInviteEmails.join(","),
+      currentUser,
+      onMembersToInvite: (membersToInvite, r, u) =>
+        emailService.bulkInviteMembers({
+          membersToInvite,
+          round: r,
+          currentUser: u,
+        }),
+    });
+
+    return {
+      status: "OK",
+      totalInEvent: fetchedEmails.length,
+      alreadyMembers: alreadyCount,
+      toInvite: toInviteEmails.length,
+      detail: null,
+      round: updatedRound,
+    };
   }
 );
 
@@ -146,6 +308,8 @@ export const editRound = combineResolvers(
       discourseCategoryId,
       ocCollectiveSlug,
       ocProjectSlug,
+      welcomeEmailSubject,
+      welcomeEmailBody,
     }
   ) => {
     const existingRound = await prisma.round.findFirst({
@@ -154,16 +318,20 @@ export const editRound = combineResolvers(
 
     let ocCollectiveId, ocProjectId;
     if (ocCollectiveSlug) {
-      const collective = await getCollective(
+      const result = await getCollective(
         { slug: ocCollectiveSlug },
         getOCToken(existingRound)
       );
-      if (collective) {
-        ocCollectiveId = collective.id;
+      if (result?.error) {
+        if (result.error.status === 401) {
+          throw new Error(UNAUTHORIZED);
+        }
+        throw new Error("Failed to fetch collective from Open Collective");
+      }
+      if (result?.id) {
+        ocCollectiveId = result.id;
         ocProjectId = null;
       } else {
-        // If collective slug is provided and collective not found
-        // throw error
         throw new Error("Collective not found");
       }
     } else if (ocCollectiveSlug === "") {
@@ -205,6 +373,8 @@ export const editRound = combineResolvers(
         color,
         bucketReviewIsOpen,
         discourseCategoryId,
+        welcomeEmailSubject,
+        welcomeEmailBody,
       },
     });
   }
@@ -572,6 +742,80 @@ export const bulkAllocate = combineResolvers(
     // Return empty array - frontend only checks for errors, not the response data
     // Returning all members would trigger N+1 queries for each member's balance
     return [];
+  }
+);
+
+export const bulkAllocateToGlobalBurnMembers = combineResolvers(
+  isCollOrGroupAdmin,
+  async (_, { roundId, amount, type, dryRun }, { user }) => {
+    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    if (!round) throw new Error("Round not found");
+
+    if (!round.globalBurnVerified) {
+      return {
+        status: "UNREACHABLE",
+        matchedMembers: null,
+        totalApproved: null,
+        totalAmount: null,
+        detail: "Global Burn is not configured for this round",
+        round,
+      };
+    }
+
+    const result = await fetchGlobalBurnMembers({
+      globalBurnInstanceUrl: round.globalBurnInstanceUrl,
+      globalBurnEventId: round.globalBurnEventId,
+      globalBurnApiKey: round.globalBurnApiKey,
+    });
+
+    if (result.status !== "OK") {
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { globalBurnVerified: false },
+      });
+      return {
+        status: result.status,
+        matchedMembers: null,
+        totalApproved: null,
+        totalAmount: null,
+        detail:
+          result.status === "UNREACHABLE" ? result.detail ?? null : null,
+        round: { ...round, globalBurnVerified: false },
+      };
+    }
+
+    const burnEmails = new Set(result.emails.map((e) => e.toLowerCase()));
+
+    const approvedMembers = await prisma.roundMember.findMany({
+      where: { roundId, isApproved: true },
+      include: { user: { include: { emailSettings: true } } },
+    });
+    const matched = approvedMembers.filter((m) =>
+      burnEmails.has((m.user.email ?? "").toLowerCase())
+    );
+
+    const currentAdminRM = await prisma.roundMember.findUnique({
+      where: { userId_roundId: { userId: user.id, roundId } },
+    });
+    if (!currentAdminRM) throw new Error("Not a round member");
+
+    const { totalAmount } = await allocateToMembers({
+      roundId,
+      members: matched,
+      amount,
+      type,
+      allocatedBy: currentAdminRM.id,
+      dryRun,
+    });
+
+    return {
+      status: "OK",
+      matchedMembers: matched.length,
+      totalApproved: approvedMembers.length,
+      totalAmount,
+      detail: null,
+      round,
+    };
   }
 );
 
@@ -1459,4 +1703,36 @@ export const changeBucketLimit = async (
   } else {
     throw new Error("Only superadmins can perform this action");
   }
+};
+
+export const setRoundPosition = combineResolvers(
+  isCollOrGroupAdmin,
+  async (parent, { roundId, newPosition }) => {
+    const round = await prisma.round.update({
+      where: { id: roundId },
+      data: { position: newPosition },
+    });
+    return round;
+  }
+);
+
+export const sendTestWelcomeEmail = async (_, { roundId }, { user }) => {
+  if (!user) throw new Error("Not authenticated");
+
+  const round = await prisma.round.findFirst({
+    where: { id: roundId },
+    include: { group: true },
+  });
+
+  if (!round?.welcomeEmailBody) {
+    throw new Error("No welcome email configured for this round");
+  }
+
+  await emailService.sendBucketCreationWelcomeEmail({
+    round,
+    user,
+    skipFirstBucketCheck: true,
+  });
+
+  return true;
 };

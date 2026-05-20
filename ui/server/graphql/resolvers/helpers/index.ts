@@ -62,10 +62,16 @@ export async function isAndGetCollMember({
 }) {
   let collMember = null;
   if (bucketId) {
-    collMember = await prisma.roundMember.findFirst({
-      where: { buckets: { some: { id: bucketId } } },
-      include,
+    const bucket = await prisma.bucket.findUnique({
+      where: { id: bucketId },
+      select: { roundId: true },
     });
+    if (bucket) {
+      collMember = await prisma.roundMember.findUnique({
+        where: { userId_roundId: { userId, roundId: bucket.roundId } },
+        include,
+      });
+    }
   } else if (roundId) {
     collMember = await prisma.roundMember.findUnique({
       where: {
@@ -96,10 +102,16 @@ export async function isAndGetCollMemberOrGroupAdmin({
   let groupMember = null;
 
   if (bucketId) {
-    collMember = await prisma.roundMember.findFirst({
-      where: { buckets: { some: { id: bucketId } } },
-      include,
+    const bucket = await prisma.bucket.findUnique({
+      where: { id: bucketId },
+      select: { roundId: true },
     });
+    if (bucket) {
+      collMember = await prisma.roundMember.findUnique({
+        where: { userId_roundId: { userId, roundId: bucket.roundId } },
+        include,
+      });
+    }
   } else if (roundId) {
     collMember = await prisma.roundMember.findUnique({
       where: {
@@ -212,11 +224,6 @@ export async function getCurrentGroupAndMember({
 
 /** contributions = donations */
 export async function bucketTotalContributions(bucket) {
-  const contributions = await prisma.contribution.findMany({
-    where: { bucketId: bucket.id },
-  });
-  return contributions.reduce((acc, curr) => acc + curr.amount, 0);
-
   const {
     _sum: { amount },
   } = await prisma.contribution.aggregate({
@@ -225,7 +232,7 @@ export async function bucketTotalContributions(bucket) {
       bucketId: bucket.id,
     },
   });
-  return amount;
+  return amount || 0;
 }
 
 /** income = existing funding */
@@ -482,7 +489,7 @@ export async function getRoundMemberBalance(member) {
 
 /** only call this if you've verified the user is at least a round admin */
 export async function stripeIsConnected({ round }) {
-  if (!round.stripeAccountId) {
+  if (!stripe || !round.stripeAccountId) {
     return false;
   }
 
@@ -597,13 +604,24 @@ export const hasFundingEnded = async ({ roundId }) => {
   }
 };
 
-export const getRoundFundingStatuses = async ({ roundId }) => {
+export const getRoundFundingStatuses = async ({
+  roundId,
+  round: providedRound,
+}: {
+  roundId?: string;
+  round?: { grantingOpens?: Date | null; grantingCloses?: Date | null };
+}) => {
   try {
     const s = {
       hasStarted: true,
       hasEnded: false,
     };
-    const round = await prisma.round.findUnique({ where: { id: roundId } });
+    // Use provided round object if available, otherwise fetch from DB
+    const round =
+      providedRound ||
+      (await prisma.round.findUnique({ where: { id: roundId } }));
+    if (!round) return s;
+
     s.hasStarted = round.grantingOpens
       ? round.grantingOpens.getTime() < Date.now()
       : true;
@@ -613,5 +631,6 @@ export const getRoundFundingStatuses = async ({ roundId }) => {
     return s;
   } catch (err) {
     //log error
+    return { hasStarted: true, hasEnded: false };
   }
 };

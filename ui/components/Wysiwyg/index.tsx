@@ -73,7 +73,7 @@ import { useQuery, gql } from "urql";
 import { namedColorToHsl, namedColorWithAlpha } from "utils/colors";
 import { appLink } from "utils/internalLinks";
 import uploadImageFiles from "utils/uploadImageFiles";
-import HappySpinner from "../HappySpinner";
+import Spinner from "../Spinner";
 import { FormattedMessage, useIntl } from "react-intl";
 import AddEditLink from "./AddEditLink";
 
@@ -102,21 +102,21 @@ const EditorCss = styled.div`
   }
 
   /* correct color on outline and toolbar buttons */
-  ${({ highlightColor }) =>
-    highlightColor
+  ${({ $highlightColor }) =>
+    $highlightColor
       ? `--rmr-color-outline: ${namedColorWithAlpha(
-          highlightColor,
+          $highlightColor,
           "100%"
         )} !important;
-        --rmr-color-primary: ${namedColorToHsl(highlightColor)} !important;
+        --rmr-color-primary: ${namedColorToHsl($highlightColor)} !important;
         --rmr-color-hover-primary: ${namedColorToHsl(
-          highlightColor
+          $highlightColor
         )} !important;`
       : ""}
 
   /* editor height */
   .ProseMirror {
-    min-height: ${({ rows }) => `${rows * 2.5}em !important`};
+    min-height: ${({ $rows }) => `${$rows * 2.5}em !important`};
   }
 
   /* to avoid the mention popup ending up under other elements
@@ -247,7 +247,7 @@ function MentionComponent({ roundId, groupId }) {
       items={items}
       ZeroItemsComponent={() =>
         fetching ? (
-          <HappySpinner className="m-3" />
+          <Spinner size="sm" className="m-3 text-gray-400" />
         ) : tooShortSearch ? (
           <div className="text-gray-700 m-3">
             <FormattedMessage defaultMessage="Type to search for a user" />
@@ -602,7 +602,7 @@ const Wysiwyg = ({
   return (
     <AllStyledComponent>
       <ThemeProvider>
-        <EditorCss highlightColor={highlightColor} rows={rows}>
+        <EditorCss $highlightColor={highlightColor} $rows={rows}>
           <input
             className="filepicker"
             type="file"

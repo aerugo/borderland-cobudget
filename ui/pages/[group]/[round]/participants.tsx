@@ -10,7 +10,9 @@ export const ROUND_QUERY = gql`
       id
       color
       numberOfApprovedMembers
+      totalInMembersBalances
       currency
+      globalBurnVerified
       group {
         id
         name
@@ -60,7 +62,12 @@ const RoundMembersPage = ({ currentUser }) => {
 };
 
 // Force SSR to avoid MUI theme context issues during static generation
-export const getServerSideProps = async () => {
+export const getServerSideProps = async ({ res }) => {
+  // Enable edge caching for anonymous users (60s cache, 5min stale-while-revalidate)
+  res.setHeader(
+    "Cache-Control",
+    "public, s-maxage=60, stale-while-revalidate=300"
+  );
   return { props: {} };
 };
 

@@ -12,6 +12,7 @@ import {
   GRAPHQL_EXPENSE_RECEIPT_NOT_FOUND,
   GRAPHQL_NOT_LOGGED_IN,
   GRAPHQL_ROUND_NOT_FOUND,
+  GRAPHQL_SUPERADMIN_ONLY,
 } from "../../../../constants";
 import prisma from "../../../prisma";
 import subscribers from "../../../subscribers/discourse.subscriber";
@@ -89,6 +90,7 @@ export const createBucket = combineResolvers(
       currentGroupMember,
       bucket: bucket,
       round: round,
+      user: user,
     });
 
     return bucket;
@@ -101,7 +103,7 @@ export const editBucket = combineResolvers(
 
     if (args.budgetItems) {
       args.budgetItems.forEach((item) => {
-        if (item.min >= item.max) {
+        if (item.max != null && item.min >= item.max) {
           throw new Error("Min amount should be greater than max amount");
         }
       });
@@ -1270,6 +1272,35 @@ export const updateExpense = async (
   } catch (e) {
     return null;
   }
+};
+
+export const deleteExpense = async (_, { id }, { ss }) => {
+  if (!ss) {
+    throw new Error(GRAPHQL_SUPERADMIN_ONLY);
+  }
+
+  const expense = await prisma.expense.findUnique({ where: { id } });
+
+  if (!expense) {
+    throw new Error(GRAPHQL_EXPENSE_NOT_FOUND);
+  }
+
+  await prisma.expenseReceipt.deleteMany({ where: { expenseId: id } });
+  return prisma.expense.delete({ where: { id } });
+};
+
+export const deleteExpenseReceipt = async (_, { id }, { ss }) => {
+  if (!ss) {
+    throw new Error(GRAPHQL_SUPERADMIN_ONLY);
+  }
+
+  const receipt = await prisma.expenseReceipt.findFirst({ where: { id } });
+
+  if (!receipt) {
+    throw new Error(GRAPHQL_EXPENSE_RECEIPT_NOT_FOUND);
+  }
+
+  return prisma.expenseReceipt.delete({ where: { id } });
 };
 
 export const toggleFavoriteBucket = async (

@@ -6,7 +6,13 @@ import prisma from "server/prisma";
 export default handler()
   .use(async (req, res, next) => {
     const { token } = req.query;
-    const payload = jwt.verify(token, process.env.MAGIC_LINK_SECRET);
+
+    let payload: any;
+    try {
+      payload = jwt.verify(token, process.env.MAGIC_LINK_SECRET);
+    } catch (err) {
+      return res.redirect("/login?error=invalid-token");
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: payload.destination },

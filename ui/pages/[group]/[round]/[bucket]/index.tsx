@@ -8,7 +8,8 @@ import Funders from "components/Bucket/Funders";
 import Comments from "components/Bucket/Comments";
 
 import classNames from "utils/classNames";
-import HappySpinner from "components/HappySpinner";
+import Spinner from "components/Spinner";
+import PrivateThreadsTab from "components/Bucket/PrivateThreadsTab";
 import { useRouter } from "next/router";
 import { initUrqlClient } from "next-urql";
 import { client as createClientConfig } from "graphql/client";
@@ -18,6 +19,7 @@ import capitalize from "utils/capitalize";
 import Head from "next/head";
 import Expenses from "components/Bucket/Expenses";
 import { FormattedMessage } from "react-intl";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
 export const BUCKET_QUERY = gql`
   query Bucket($id: ID) {
@@ -46,6 +48,10 @@ export const BUCKET_QUERY = gql`
       noOfFunders
       status
       isFavorite
+
+      canAccessPrivateConversations
+      canStartPrivateConversation
+      noOfPrivateConversations
 
       directFundingEnabled
       directFundingType
@@ -172,6 +178,7 @@ export const BUCKET_QUERY = gql`
         min
         max
         type
+        position
       }
     }
   }
@@ -206,25 +213,48 @@ const BucketIndex = ({ head, currentUser, currentGroup }) => {
     bucket?.round?.guidelines.length > 0 &&
     bucket?.published;
 
-  const tabsList = useMemo(
-    () => ["bucket", "comments", "funders", "expenses"],
-    []
-  );
-  useEffect(() => {
-    const index = tabsList.findIndex((tab) => tab === router.query.tab);
-    setTab(index > -1 ? index : 0);
-  }, [router.query.tab, tabsList]);
-
   const showExpensesTab =
     currentGroup?.experimentalFeatures &&
     (bucket?.status === "FUNDED" || bucket?.status === "COMPLETED");
+
+  const showDreamTeamTab = !!bucket?.canAccessPrivateConversations;
+
+  const isTeamMember = !!(
+    currentUser?.currentCollMember?.isAdmin ||
+    currentUser?.currentCollMember?.isModerator
+  );
+
+  const tabsList = useMemo(() => {
+    const list = ["bucket", "comments", "funders"];
+    if (showExpensesTab) list.push("expenses");
+    if (showDreamTeamTab) list.push("dreamteam");
+    return list;
+  }, [showExpensesTab, showDreamTeamTab]);
+
+  useEffect(() => {
+    const index = tabsList.findIndex((tab) => tab === router.query.tab);
+    if (index > -1) {
+      setTab(index);
+    } else {
+      setTab(0);
+      // Clean stale query params if ?tab points to a hidden tab.
+      if (router.query.tab || router.query.thread) {
+        const { tab: _t, thread: _th, ...rest } = router.query;
+        router.replace({ pathname: router.pathname, query: rest }, undefined, {
+          scroll: false,
+          shallow: true,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.query.tab, tabsList]);
 
   if ((!bucket && fetching) || !router.isReady) {
     return (
       <>
         <Header head={head} />
         <div className="flex-grow flex justify-center items-center h-64">
-          <HappySpinner />
+          <Spinner size="lg" className="text-gray-400" />
         </div>
       </>
     );
@@ -332,6 +362,26 @@ const BucketIndex = ({ head, currentUser, currentGroup }) => {
                   : ""}
               </Tab>
             ) : null}
+            {showDreamTeamTab ? (
+              <Tab
+                className={({ selected }) =>
+                  classNames(
+                    "block px-2 py-4 border-b-2 font-medium transition-colors",
+                    selected
+                      ? "border-anthracit text-anthracit"
+                      : "border-transparent text-gray-500"
+                  )
+                }
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <LockOutlinedIcon fontSize="small" />
+                  Dream Team
+                  {bucket?.noOfPrivateConversations
+                    ? ` (${bucket.noOfPrivateConversations})`
+                    : ""}
+                </span>
+              </Tab>
+            ) : null}
           </Tab.List>
         </div>
 
@@ -349,75 +399,51 @@ const BucketIndex = ({ head, currentUser, currentGroup }) => {
           <Tab.Panel>
             <Funders bucket={bucket} currentUser={currentUser} />
           </Tab.Panel>
-          <Tab.Panel>
-            <Expenses
-              bucket={bucket}
-              round={bucket.round}
-              currentUser={currentUser}
-            />
-          </Tab.Panel>
+          {showExpensesTab ? (
+            <Tab.Panel>
+              <Expenses
+                bucket={bucket}
+                round={bucket.round}
+                currentUser={currentUser}
+              />
+            </Tab.Panel>
+          ) : null}
+          {showDreamTeamTab ? (
+            <Tab.Panel>
+              <PrivateThreadsTab
+                bucket={bucket}
+                canEditBucketSelection={isTeamMember}
+                isTeamMember={isTeamMember}
+              />
+            </Tab.Panel>
+          ) : null}
         </Tab.Panels>
       </Tab.Group>
     </>
   );
 };
 
-// export async function getStaticProps(ctx) {
-//   const ssrCache = ssrExchange({
-//     isClient: false,
-//   });
-//   const client = initUrqlClient(createClientConfig(ssrCache), false);
-
-//   // This query is used to populate the cache for the query
-//   // used on this page.
-
-//   await client
-//     .query(TOP_LEVEL_QUERY, {
-//       groupSlug: ctx.params.group,
-//       roundSlug: ctx.params.round,
-//       bucketId: ctx.params.bucket,
-//     })
-//     .toPromise();
-//   await client.query(BUCKET_QUERY, { id: ctx.params.bucket }).toPromise();
-
-//   return {
-//     props: {
-//       // urqlState is a keyword here so withUrqlClient can pick it up.
-//       urqlState: ssrCache.extractData(),
-//     },
-//     revalidate: 60,
-//   };
-// }
-
-// export async function getStaticPaths() {
-//   const buckets = await prisma.bucket.findMany({
-//     where: { publishedAt: { not: null }, round: { visibility: "PUBLIC" } },
-//     include: { round: { include: { group: true } } },
-//   });
-
-//   return {
-//     // paths: buckets.map((bucket) => ({
-//     //   params: {
-//     //     group: bucket.round.group.slug,
-//     //     round: bucket.round.slug,
-//     //     bucket: bucket.id,
-//     //   },
-//     // })),
-//     paths: [],
-//     fallback: true, // false or 'blocking'
-//   };
-// }
-
-export async function getServerSideProps(ctx) {
+// Use ISR (Incremental Static Regeneration) for dream detail pages
+// This caches pages at the edge and regenerates them every 60 seconds
+export async function getStaticProps(ctx) {
   const bucket = await prisma.bucket.findUnique({
     where: { id: ctx.params.bucket },
+    include: {
+      Images: {
+        take: 1,
+      },
+    },
   });
-  const images = await prisma.bucket
-    .findUnique({ where: { id: ctx.params.bucket } })
-    .Images();
+
+  // Return 404 for non-existent buckets, retry after 60 seconds
   if (!bucket) {
-    return { props: { head: null } };
+    return {
+      notFound: true,
+      revalidate: 60,
+    };
   }
+
+  const images = bucket.Images || [];
   return {
     props: {
       head: {
@@ -426,6 +452,17 @@ export async function getServerSideProps(ctx) {
         image: images.length > 0 ? images[0].large : process.env.PLATFORM_LOGO,
       },
     },
+    // Regenerate the page every 60 seconds when requested
+    revalidate: 60,
+  };
+}
+
+export async function getStaticPaths() {
+  // Don't pre-generate any paths at build time
+  // Pages are generated on-demand and cached
+  return {
+    paths: [],
+    fallback: "blocking", // Wait for generation on first request
   };
 }
 

@@ -13,6 +13,7 @@ import Button from "../../Button";
 import { FormattedMessage, useIntl } from "react-intl";
 import toast from "react-hot-toast";
 import { COCREATORS_CANT_EDIT } from "../../../utils/messages";
+import { markdownVisibleLength } from "../../../utils/markdownLength";
 
 const EDIT_BUCKET_CUSTOM_FIELD_MUTATION = gql`
   mutation EditBucketCustomField(
@@ -60,9 +61,14 @@ const BucketCustomField = ({
   };
 
   const schema = useMemo(() => {
+    const limit = defaultCustomField.limit ?? Infinity;
     const maxValue = yup
       .string()
-      .max(defaultCustomField.limit ?? Infinity, "Too long");
+      .test(
+        "markdown-max",
+        "Too long",
+        (value) => !value || markdownVisibleLength(value) <= limit
+      );
 
     return yup.object().shape({
       customField: yup.object().shape({
@@ -157,7 +163,7 @@ const BucketCustomField = ({
               ? intl.formatMessage(
                   { defaultMessage: "{count} characters remaining." },
                   {
-                    count: String(defaultCustomField.limit - inputValue.length),
+                    count: String(defaultCustomField.limit - markdownVisibleLength(inputValue ?? "")),
                   }
                 )
               : ""}

@@ -689,4 +689,57 @@ export default {
 
     await sendEmails(emails);
   },
+  sendBucketCreationWelcomeEmail: async ({
+    round,
+    user,
+    bucket,
+    skipFirstBucketCheck = false,
+  }: {
+    round: {
+      id: string;
+      title: string;
+      slug: string;
+      welcomeEmailSubject?: string | null;
+      welcomeEmailBody?: string | null;
+      group: { slug: string };
+    };
+    user: { id: string; name?: string; email: string };
+    bucket?: { id: string; title: string };
+    skipFirstBucketCheck?: boolean;
+  }) => {
+    // Feature is disabled if no welcome email body is set
+    if (!round.welcomeEmailBody) return;
+
+    // Only send on the user's first bucket in this round (unless bypassed for test sends)
+    if (!skipFirstBucketCheck) {
+      const existingBuckets = await prisma.bucket.count({
+        where: {
+          roundId: round.id,
+          cocreators: { some: { userId: user.id } },
+          ...(bucket ? { id: { not: bucket.id } } : {}),
+        },
+      });
+      if (existingBuckets > 0) return;
+    }
+
+    const bucketLink = bucket
+      ? appLink(`/${round.group.slug}/${round.slug}/${bucket.id}`)
+      : appLink(`/${round.group.slug}/${round.slug}`);
+    const htmlBody = await mdToHtml(round.welcomeEmailBody);
+    const subject =
+      round.welcomeEmailSubject || `Welcome to ${round.title}!`;
+    const bucketName = process.env.BUCKET_NAME_SINGULAR || "bucket";
+
+    await sendEmail({
+      to: user.email,
+      subject,
+      html: `Hi${user.name ? ` ${escape(user.name)}` : ""}!
+      <br/><br/>
+      ${htmlBody}
+      ${bucket ? `<br/><br/><a href="${bucketLink}">View your ${bucketName}: ${escape(bucket.title)}</a>` : `<br/><br/><a href="${bucketLink}">View the round</a>`}
+      <br/><br/>
+      ${footer}
+      `,
+    });
+  },
 };

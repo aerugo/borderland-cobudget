@@ -2,7 +2,7 @@ import { UNAUTHORIZED } from "../../../../constants";
 import { customOCGqlClient } from "utils/graphqlClient";
 
 export const GET_COLLECTIVE = `
-    query ($slug: String, $id: String, $limit: Int, $account: AccountReferenceInput!){
+    query ($slug: String, $id: String, $limit: Int!, $offset: Int!){
       collective (slug:$slug, id: $id) {
         id
         slug
@@ -14,7 +14,7 @@ export const GET_COLLECTIVE = `
             valueInCents
           }
         }
-        webhooks(limit: $limit, account: $account) {
+        webhooks(limit: $limit, offset: $offset) {
           totalCount
           limit
           nodes {
@@ -26,13 +26,13 @@ export const GET_COLLECTIVE = `
 `;
 
 export const GET_PROJECT = `
-    query ($slug: String, $id: String,  $limit: Int, $account: AccountReferenceInput!) {
+    query ($slug: String, $id: String, $limit: Int!, $offset: Int!) {
         project (slug:$slug, id: $id) {
           id
           slug
           name
           type
-          webhooks(limit: $limit, account: $account) {
+          webhooks(limit: $limit, offset: $offset) {
             totalCount
             limit
             nodes {
@@ -149,10 +149,38 @@ export const GET_EXPENSE = `
 `;
 
 const handleOCError = (err) => {
-  if (err.response.status == 401) {
+  const status = err.response?.status;
+  if (status === 401) {
     return { error: { status: 401, message: UNAUTHORIZED } };
   }
-  return null;
+  return {
+    error: {
+      status: status || 500,
+      message: err.message || "Unknown Open Collective API error",
+    },
+  };
+};
+
+export const VALIDATE_TOKEN = `
+  query {
+    loggedInAccount {
+      id
+      slug
+    }
+  }
+`;
+
+export const validateOCToken = async (token: string) => {
+  const graphqlClient = customOCGqlClient(token);
+  try {
+    const response = await graphqlClient.request(VALIDATE_TOKEN);
+    if (!response?.loggedInAccount?.id) {
+      return { error: { status: 401, message: UNAUTHORIZED } };
+    }
+    return response.loggedInAccount;
+  } catch (err) {
+    return handleOCError(err);
+  }
 };
 
 export const getCollective = async (
@@ -164,10 +192,7 @@ export const getCollective = async (
     const response = await graphqlClient.request(GET_COLLECTIVE, {
       ...filter,
       limit: 100,
-      account: {
-        slug: filter.slug,
-        id: filter.id,
-      },
+      offset: 0,
     });
     return response.collective;
   } catch (err) {
@@ -184,10 +209,7 @@ export const getProject = async (
     const response = await graphqlClient.request(GET_PROJECT, {
       ...filter,
       limit: 100,
-      account: {
-        slug: filter.slug,
-        id: filter.id,
-      },
+      offset: 0,
     });
     return response.project;
   } catch (err) {
